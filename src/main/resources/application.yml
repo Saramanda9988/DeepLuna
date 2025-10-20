@@ -1,0 +1,12 @@
+server:
+  tomcat:
+    max-connections: 10000
+  port: 8080
+spring:
+  application:
+    name: ${spring.application.name}
+  datasource:
+    url: jdbc:mysql://${application.mysql.ip}:${application.mysql.port}/${application.mysql.db}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: ${application.mysql.username}
+    password: ${application.mysql.password}
+    driver-class-name: com.mysql.cj.jdbc.Driver
