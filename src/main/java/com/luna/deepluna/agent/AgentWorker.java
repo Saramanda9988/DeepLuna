@@ -1,6 +1,5 @@
 package com.luna.deepluna.agent;
 
-import com.luna.deepluna.common.core.Task;
 import com.luna.deepluna.common.core.TaskResult;
 
 /**
@@ -8,9 +7,9 @@ import com.luna.deepluna.common.core.TaskResult;
  */
 public interface AgentWorker {
 
-    TaskResult execute(Task task);
+    TaskResult execute();
 
     String getAgentType();
 
-    boolean canHandle(Task task);
+    boolean canHandle();
 }
