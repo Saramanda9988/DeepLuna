@@ -3,7 +3,10 @@ package com.luna.deepluna.entity;
 import com.luna.deepluna.common.enums.AgentTypeEnums;
 import com.luna.deepluna.common.enums.TaskStatus;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -16,6 +19,9 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "task")
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class Task {
     
     @Id

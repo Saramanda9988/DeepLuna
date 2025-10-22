@@ -1,7 +1,10 @@
 package com.luna.deepluna.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -12,6 +15,9 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "clarify_history")
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class ClarifyHistory {
     
     @Id

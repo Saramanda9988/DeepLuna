@@ -1,7 +1,10 @@
 package com.luna.deepluna.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 用户实体类
@@ -9,6 +12,9 @@ import lombok.Data;
 @Data
 @Entity
 @Table(name = "user")
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class User {
     
     @Id

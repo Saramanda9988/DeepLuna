@@ -2,7 +2,10 @@ package com.luna.deepluna.entity;
 
 import com.luna.deepluna.common.enums.SessionStatus;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -14,6 +17,9 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "session")
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class Session {
     
     @Id
@@ -25,6 +31,9 @@ public class Session {
     
     @Column(name = "model", nullable = false, length = 20)
     private String model;
+
+    @Column(name = "summary")
+    private String summary;
     
     @Enumerated(EnumType.ORDINAL)
     @Column(name = "status", nullable = false)
