@@ -33,7 +33,7 @@ public class SessionService {
                 .sessionId(sessionId)
                 .userId(request.getUserId())
                 .model(request.getModel())
-                .status(SessionStatus.ACTIVE)
+                .status(SessionStatus.INIT)
                 .build();
         
         sessionRepository.save(session);
