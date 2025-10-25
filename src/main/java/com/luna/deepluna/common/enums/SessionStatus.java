@@ -6,7 +6,7 @@ import lombok.Getter;
 @AllArgsConstructor
 @Getter
 public enum SessionStatus {
-    INIT(0, "初始化"),
+    IDLE(0, "空闲中"),
     CLARIFYING(1, "澄清中"),
     RUNNING(2, "运行中"),
     REPORTING(3, "报告中"),

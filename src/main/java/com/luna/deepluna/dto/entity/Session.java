@@ -1,4 +1,4 @@
-package com.luna.deepluna.entity;
+package com.luna.deepluna.dto.entity;
 
 import com.luna.deepluna.common.enums.SessionStatus;
 import jakarta.persistence.*;

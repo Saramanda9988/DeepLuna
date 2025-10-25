@@ -1,4 +1,4 @@
-package com.luna.deepluna.entity;
+package com.luna.deepluna.dto.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

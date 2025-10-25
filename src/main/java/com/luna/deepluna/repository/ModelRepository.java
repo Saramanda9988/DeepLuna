@@ -1,7 +1,6 @@
 package com.luna.deepluna.repository;
 
-import com.luna.deepluna.entity.Model;
-import com.luna.deepluna.entity.Session;
+import com.luna.deepluna.dto.entity.Model;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

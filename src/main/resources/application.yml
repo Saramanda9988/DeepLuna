@@ -10,6 +10,9 @@ spring:
     username: ${application.mysql.username}
     password: ${application.mysql.password}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  ai:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY}
   jpa:
     hibernate:
       ddl-auto: validate

@@ -1,4 +1,4 @@
-package com.luna.deepluna.entity;
+package com.luna.deepluna.dto.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -14,11 +14,11 @@ import java.time.LocalDateTime;
  */
 @Data
 @Entity
-@Table(name = "clarify_history")
+@Table(name = "chat_history")
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class ClarifyHistory {
+public class ChatHistory {
     
     @Id
     @Column(name = "id")
