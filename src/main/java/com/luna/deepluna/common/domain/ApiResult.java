@@ -2,6 +2,7 @@ package com.luna.deepluna.common.domain;
 
 import com.luna.deepluna.common.enums.ErrorEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.jetbrains.annotations.Nullable;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -14,10 +15,15 @@ public class ApiResult<T> implements Serializable {
     @Schema(description = "成功标识true or false")
     @NotNull
     private Boolean success;
+
+    @Nullable
     @Schema(description = "错误码")
     private Integer errCode;
+
+    @Nullable
     @Schema(description = "错误消息")
     private String errMsg;
+
     @Schema(description = "返回对象")
     private T data;
 

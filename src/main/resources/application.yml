@@ -1,7 +1,7 @@
 server:
   tomcat:
     max-connections: 10000
-  port: 8080
+  port: 8090
 spring:
   application:
     name: ${spring.application.name}

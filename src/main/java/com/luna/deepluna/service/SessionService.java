@@ -32,8 +32,8 @@ public class SessionService {
         Session session = Session.builder()
                 .sessionId(sessionId)
                 .userId(request.getUserId())
-                .model(request.getModel())
-                .status(SessionStatus.INIT)
+                .model(request.getModel() == null ? "default_deepseek" : request.getModel())
+                .status(SessionStatus.IDLE)
                 .build();
         
         sessionRepository.save(session);

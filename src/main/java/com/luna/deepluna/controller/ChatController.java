@@ -1,6 +1,7 @@
 package com.luna.deepluna.controller;
 
 
+import com.luna.deepluna.common.client.SseTransportClient;
 import com.luna.deepluna.common.domain.ApiResult;
 import com.luna.deepluna.dto.request.ChatRequest;
 import com.luna.deepluna.dto.response.ChatResp;
@@ -25,6 +26,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class ChatController {
     
     private final ChatService chatService;
+
+    private final SseTransportClient sseTransportClient;
     
     /**
      * 聊天接口 - 流式响应
@@ -33,24 +36,11 @@ public class ChatController {
     @Operation(summary = "流式聊天接口", description = "处理用户聊天消息，支持流式响应、问题澄清和研究任务执行")
     public SseEmitter chatStream(@RequestBody @Validated ChatRequest request) {
         log.info("Received streaming chat request: sessionId={}, message={}", request.getSessionId(), request.getMessage());
+
+        SseEmitter sseEmitter = sseTransportClient.createConnection(30000L);
+
+        chatService.processChatStream(request, sseEmitter);
         
-        SseEmitter emitter = new SseEmitter(300000L); // 5分钟超时
-        
-        try {
-            chatService.processChatStream(request, emitter);
-        } catch (Exception e) {
-            log.error("Error processing streaming chat request for sessionId: {}", request.getSessionId(), e);
-            try {
-                emitter.send(SseEmitter.event()
-                    .name("error")
-                    .data("处理请求时发生错误: " + e.getMessage()));
-                emitter.complete();
-            } catch (Exception sendException) {
-                log.error("Error sending error message", sendException);
-                emitter.completeWithError(sendException);
-            }
-        }
-        
-        return emitter;
+        return sseEmitter;
     }
 }

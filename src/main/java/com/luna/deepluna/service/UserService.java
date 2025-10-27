@@ -29,7 +29,7 @@ public class UserService {
     public UserResponse register(RegisterRequest request) {
         // 检查用户名是否已存在
         User existingUser = userRepository.findByUserName(request.getUserName());
-        AssertUtil.isNotNull(existingUser, "用户名已存在");
+        AssertUtil.isNull(existingUser, "用户名已存在");
         
         // 生成用户ID（简单实现，实际应用中可以使用雪花算法等）
         Long userId = System.currentTimeMillis();
@@ -56,7 +56,7 @@ public class UserService {
         User user = userRepository.findByUserName(request.getUserName());
         AssertUtil.isNotNull(user, "用户不存在");
         
-        AssertUtil.notEqual(user.getPassword(), request.getPassword(), "密码错误");
+        AssertUtil.equal(user.getPassword(), request.getPassword(), "密码错误");
         
         UserResponse userResponse = new UserResponse(user.getUserId(), user.getUserName());
         

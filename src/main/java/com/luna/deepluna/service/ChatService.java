@@ -1,9 +1,11 @@
 package com.luna.deepluna.service;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.luna.deepluna.common.client.SseTransportClient;
 import com.luna.deepluna.common.enums.SessionStatus;
 import com.luna.deepluna.common.exception.BusinessException;
+import com.luna.deepluna.common.prompt.Prompts;
 import com.luna.deepluna.common.utils.AssertUtil;
 import com.luna.deepluna.dto.entity.ChatHistory;
 import com.luna.deepluna.dto.entity.Session;
@@ -17,22 +19,21 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
-import org.springframework.ai.chat.model.ChatResponse;
 
-import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -43,12 +44,25 @@ public class ChatService {
 
     record ClarifyResult(Boolean isClear) {}
 
-    record ClarifyQuestions(String question) {}
+    public record ResearchBrief(
+            @JsonProperty("markdown") String markdown,
+            @JsonProperty("unknowns") List<UnknownItem> unknowns,
+            @JsonProperty("assumptions") List<String> assumptions,
+            @JsonProperty("recommended_actions") List<String> recommendedActions
+    ) {
+        public record UnknownItem(
+                @JsonProperty("id") String id,
+                @JsonProperty("description") String description,
+                @JsonProperty("impact") String impact,
+                @JsonProperty("mcp_keywords") List<String> mcpKeywords
+        ) {}
+    }
 
     @JsonPropertyOrder({ "isClear" })
     private final BeanOutputConverter<ClarifyResult> checkConverter = new BeanOutputConverter<>(ClarifyResult.class);
 
-    private final BeanOutputConverter<ClarifyQuestions> questionConverter = new BeanOutputConverter<>(ClarifyQuestions.class);
+    @JsonPropertyOrder({"markdown", "unknowns", "assumptions", "recommended_actions"})
+    private final BeanOutputConverter<ResearchBrief> briefConverter = new BeanOutputConverter<>(ResearchBrief.class);
 
     private final ChatMemory chatMemory;
     private final DeepSeekChatModel chatModel;
@@ -56,8 +70,8 @@ public class ChatService {
     private final ChatHistoryRepository chatHistoryRepository;
     private final SseTransportClient sseTransportClient;
 
-    private final ConcurrentMap<Session, Integer> sessionChatRounds = new ConcurrentHashMap<>();
-    private final ConcurrentMap<Long, Session> activeSessions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Integer> sessionChatRounds = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Session> activeSessions = new ConcurrentHashMap<>();
 
     /**
      * 处理流式聊天请求
@@ -68,31 +82,32 @@ public class ChatService {
 
         try {
             // 1. 检查session是否存在
-            Optional<Session> sessionOpt = sessionRepository.findById(request.getSessionId());
-            Session session = sessionOpt.orElse(null);
-            AssertUtil.isNotNull(session, "Session不存在");
-            AssertUtil.isTrue(Objects.equals(session.getStatus(), SessionStatus.IDLE), "当前Session状态不允许新的请求");
+            Session session = getSession(request);
+
+            AssertUtil.isTrue(
+                    Objects.equals(session.getStatus(), SessionStatus.IDLE) ||
+                    Objects.equals(session.getStatus(), SessionStatus.CLARIFYING),
+                    "当前Session状态不允许新的请求"
+            );
 
             log.info("更新会话 {} 状态: {}", session.getSessionId(), session.getStatus());
-            session.setStatus(SessionStatus.CLARIFYING);
-            sessionRepository.save(session);
+            updateSessionStatus(session, SessionStatus.CLARIFYING);
 
             // 发送状态更新
             sseTransportClient.sendMessage(emitter, StreamChatResponse.builder()
                             .sessionId(session.getSessionId())
                             .streamFinished(false)
                             .sessionStatus(SessionStatus.CLARIFYING)
-                            .message("正在处理您的请求...")
                             .build());
 
             // 3. 判断问题是否清晰
-            boolean isClear = checkQuestionClarity(request.getMessage());
+            boolean isClear = checkQuestionClarity(request.getMessage(), session.getSessionId());
 
             if (!isClear) {
                 // 问题不清晰，请求用户补充
                 handleUnclearQuestionStream(session, request.getMessage(), emitter);
             } else {
-                // 问题清晰，进入RUNNING阶段
+                // 问题清晰
                 handleClearQuestionStream(session, request.getMessage(), emitter);
             }
 
@@ -107,43 +122,48 @@ public class ChatService {
     }
 
     /**
+     * 获取Session
+     * @param request ChatRequest
+     * @return session
+     */
+    private Session getSession(ChatRequest request) {
+        if (Objects.isNull(request.getSessionId())) {
+            throw new BusinessException("SessionId不能为空");
+        }
+        String sessionId = request.getSessionId();
+        Session session = activeSessions.get(sessionId);
+        if (session == null) {
+            Optional<Session> sessionOpt = sessionRepository.findById(sessionId);
+            session = sessionOpt.orElseThrow(() -> new BusinessException("Session不存在"));
+            activeSessions.put(sessionId, session);
+        }
+        return session;
+    }
+
+    /**
+     * 获取澄清轮数
+     */
+    private Integer getChatRoundNumber(String sessionId) {
+        Integer i = sessionChatRounds.get(sessionId);
+        if (i == null) {
+            ChatHistory latestHistory = chatHistoryRepository.findTopBySessionIdOrderByRoundNumberDesc(sessionId);
+            i =  latestHistory != null ? latestHistory.getRoundNumber() : 0;
+            sessionChatRounds.put(sessionId, i);
+        }
+        return i;
+    }
+
+    /**
      * 检查问题是否清晰
      */
-    private boolean checkQuestionClarity(String message) {
+    private boolean checkQuestionClarity(String message, String sessionId) {
         log.info("Checking question clarity for message: {}", message);
 
+        List<Message> histories = chatMemory.get(sessionId);
+        histories = new ArrayList<>(histories);
+        histories.add(new UserMessage(Prompts.JUDGE_PROMPT.formatted(message)));
 
-        // FIXME: 这里的提示词可以根据实际需求进行调整和优化, 有必要提供上下文信息
-        String clarityPrompt = """
-            请判断以下用户问题是否足够清晰和具体，能够直接执行研究任务：
-        
-            用户问题：%s
-        
-            判断标准：
-            1. 问题是否明确具体
-            2. 研究范围是否清楚
-            3. 期望的结果是否明确
-            4. 是否包含足够的上下文信息
-        
-            回答要求（仅返回 JSON，不要添加其他说明）：
-            - isClear：布尔值，true 或 false。
-        
-            示例：
-        
-            example1:
-            {
-                "isClear": true
-            }
-        
-            example2:
-            {
-                "isClear": false,
-            }
-        
-            你的回答必须只返回 JSON，不要返回任何额外文本或说明。
-            """.formatted(message);
-
-        Generation response = chatModel.call(new Prompt(new UserMessage(clarityPrompt))).getResult();
+        Generation response = chatModel.call(new Prompt(histories)).getResult();
         String text = response.getOutput().getText();
         AssertUtil.isNotNull(text, "AI未返回澄清结果");
         ClarifyResult convert = checkConverter.convert(text);
@@ -156,7 +176,8 @@ public class ChatService {
     /**
      * 保存澄清历史
      */
-    private void saveChatHistory(String sessionId, String question, String answer, boolean completed) {
+    @Async
+    protected void saveChatHistory(String sessionId, String question, String answer, boolean completed) {
         ChatHistory history = ChatHistory.builder()
                 .id(UUID.randomUUID().toString())
                 .sessionId(sessionId)
@@ -174,30 +195,17 @@ public class ChatService {
     }
 
     /**
-     * 获取澄清轮数
-     */
-    private Integer getChatRoundNumber(String sessionId) {
-        ChatHistory latestHistory = chatHistoryRepository.findTopBySessionIdOrderByRoundNumberDesc(sessionId);
-        return latestHistory != null ? latestHistory.getRoundNumber() : 0;
-    }
-
-    /**
      * 流式处理不清晰的问题
      */
     private void handleUnclearQuestionStream(Session session, String message, SseEmitter emitter) {
         log.info("Handling unclear question for sessionId: {}", session.getSessionId());
 
-        // 生成澄清问题
-        String clarificationPrompt = """
-            用户提出了以下问题，但不够清晰具体。请生成1-2个澄清问题来帮助用户明确研究需求：
-            
-            用户问题：%s
-            
-            请生成2-3个简洁明确的澄清问题，帮助用户提供更多必要信息。
-            """.formatted(message);
+        List<Message> histories = chatMemory.get(session.getSessionId());
+        histories = new ArrayList<>(histories);
+        histories.add(new UserMessage(Prompts.CLARIFY_PROMPT.formatted(message)));
 
         // 使用流式调用
-        Flux<ChatResponse> responseFlux = chatModel.stream(new Prompt(new UserMessage(clarificationPrompt)));
+        Flux<ChatResponse> responseFlux = chatModel.stream(new Prompt(histories));
         handleStreamingResponse(responseFlux, session, message, emitter);
     }
 
@@ -207,36 +215,35 @@ public class ChatService {
     private void handleClearQuestionStream(Session session, String message, SseEmitter emitter) {
         log.info("Handling clear question for sessionId: {}", session.getSessionId());
 
-        try {
-            // 设置session状态为RUNNING
-            session.setStatus(SessionStatus.CLARIFYING);
-            sessionRepository.save(session);
-            log.info("Updated session status to RUNNING");
+        List<Message> histories = chatMemory.get(session.getSessionId());
+        histories = new ArrayList<>(histories);
 
-            // 发送完成信息
-            StreamChatResponse response = StreamChatResponse.builder()
-                    .sessionId(session.getSessionId())
-                    .sessionStatus(SessionStatus.CLARIFYING)
-                    .streamFinished(true)
-                    .build();
+        // 生成研究简报
+        histories = chatMemory.get(session.getSessionId());
+        histories = new ArrayList<>(histories);
+        histories.add(new UserMessage(Prompts.BRIEF_PROMPT));
 
-            sseTransportClient.sendEndMessage(emitter, response);
+        Generation response = chatModel.call(new Prompt(histories)).getResult();
+        String text = response.getOutput().getText();
+        AssertUtil.isNotNull(text, "AI未返回澄清结果");
+        ResearchBrief convert = briefConverter.convert(text);
+        histories.add(new AssistantMessage(text));
 
-            // TODO: 在这里启动sub-agent执行具体的研究任务
-            // startSubAgentStream(session, message, emitter);
+        // 生成总结回复
+        histories.add(new UserMessage(Prompts.SUMMARY_PROMPT.formatted(message)));
+        Flux<ChatResponse> stream = chatModel.stream(new Prompt(histories));
 
-        } catch (Exception e) {
-            sseTransportClient.handleError(emitter, e);
-        }
-    }
+        handleStreamingResponse(stream, session, message, emitter);
 
-    // TODO: 预留给sub-agent启动的方法
-    private void startSubAgent(Session session, String message) {
-        log.info("Starting sub-agent for sessionId: {}", session.getSessionId());
-        // 这里将来实现启动具体的研究代理
-        // 1. 解析研究任务
-        // 2. 选择合适的sub-agent
-        // 3. 启动异步执行
+        // 保存研究简报到session
+        session.setResearchBrief(text);
+        sessionRepository.save(session);
+        log.info("Saved research brief for sessionId: {}", session.getSessionId());
+
+        // TODO: 在这里启动sub-agent执行具体的研究任务
+        // startSubAgentStream(session, message, emitter);
+
+        updateSessionStatus(session, SessionStatus.RUNNING);
     }
 
     /**
@@ -247,7 +254,7 @@ public class ChatService {
         StringBuilder fullResponse = new StringBuilder();
         responseFlux.subscribe(
             response -> {
-                String content = response.getResult().getOutput().toString();
+                String content = response.getResult().getOutput().getText();
                 fullResponse.append(content);
                 // 发送流式内容
                 sseTransportClient.sendMessage(emitter, ChatResp.builder()
@@ -276,13 +283,16 @@ public class ChatService {
             }
         );
     }
-    
-    // TODO: 预留给流式sub-agent启动的方法
-    private void startSubAgentStream(Session session, String message, SseEmitter emitter) {
-        log.info("Starting streaming sub-agent for sessionId: {}", session.getSessionId());
-        // 这里将来实现启动具体的流式研究代理
-        // 1. 解析研究任务
-        // 2. 选择合适的sub-agent
-        // 3. 启动异步执行并通过SSE发送进度
+
+    private void updateSessionStatus(Session session, SessionStatus status) {
+        log.info("Updating session {} status to {}", session.getSessionId(), status);
+        AssertUtil.isNotNull(session, "Session不能为空");
+        session.setStatus(status);
+
+        // TODO: 使用@Async注解控制的受控线程池异步保存
+        CompletableFuture.runAsync(() -> {
+            sessionRepository.save(session);
+            log.info("Session {} status updated to {}", session.getSessionId(), status);
+        });
     }
 }
