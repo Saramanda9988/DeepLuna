@@ -1,6 +1,5 @@
 package com.luna.deepluna.service;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.luna.deepluna.common.client.SseTransportClient;
 import com.luna.deepluna.common.enums.SessionStatus;
@@ -9,10 +8,12 @@ import com.luna.deepluna.common.prompt.Prompts;
 import com.luna.deepluna.common.utils.AssertUtil;
 import com.luna.deepluna.dto.entity.ChatHistory;
 import com.luna.deepluna.dto.entity.Session;
+import com.luna.deepluna.dto.jsonConvert.ClarifyResult;
 import com.luna.deepluna.dto.request.ChatRequest;
 import com.luna.deepluna.dto.response.ChatResp;
 import com.luna.deepluna.dto.response.ClarifyChatResponse;
 import com.luna.deepluna.dto.response.StreamChatResponse;
+import com.luna.deepluna.agent.context.SupervisorAgentContext;
 import com.luna.deepluna.repository.ChatHistoryRepository;
 import com.luna.deepluna.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,33 +44,15 @@ import java.util.concurrent.ConcurrentMap;
 @RequiredArgsConstructor
 public class ChatService {
 
-    record ClarifyResult(Boolean isClear) {}
-
-    public record ResearchBrief(
-            @JsonProperty("markdown") String markdown,
-            @JsonProperty("unknowns") List<UnknownItem> unknowns,
-            @JsonProperty("assumptions") List<String> assumptions,
-            @JsonProperty("recommended_actions") List<String> recommendedActions
-    ) {
-        public record UnknownItem(
-                @JsonProperty("id") String id,
-                @JsonProperty("description") String description,
-                @JsonProperty("impact") String impact,
-                @JsonProperty("mcp_keywords") List<String> mcpKeywords
-        ) {}
-    }
-
     @JsonPropertyOrder({ "isClear" })
     private final BeanOutputConverter<ClarifyResult> checkConverter = new BeanOutputConverter<>(ClarifyResult.class);
-
-    @JsonPropertyOrder({"markdown", "unknowns", "assumptions", "recommended_actions"})
-    private final BeanOutputConverter<ResearchBrief> briefConverter = new BeanOutputConverter<>(ResearchBrief.class);
 
     private final ChatMemory chatMemory;
     private final DeepSeekChatModel chatModel;
     private final SessionRepository sessionRepository;
     private final ChatHistoryRepository chatHistoryRepository;
     private final SseTransportClient sseTransportClient;
+    private final ResearchService researchService;
 
     private final ConcurrentMap<String, Integer> sessionChatRounds = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Session> activeSessions = new ConcurrentHashMap<>();
@@ -161,7 +145,7 @@ public class ChatService {
 
         List<Message> histories = chatMemory.get(sessionId);
         histories = new ArrayList<>(histories);
-        histories.add(new UserMessage(Prompts.JUDGE_PROMPT.formatted(message)));
+        histories.add(new UserMessage(Prompts.JUDGE_PROMPT.formatted(LocalDateTime.now(), message)));
 
         Generation response = chatModel.call(new Prompt(histories)).getResult();
         String text = response.getOutput().getText();
@@ -221,13 +205,12 @@ public class ChatService {
         // 生成研究简报
         histories = chatMemory.get(session.getSessionId());
         histories = new ArrayList<>(histories);
-        histories.add(new UserMessage(Prompts.BRIEF_PROMPT));
+        histories.add(new UserMessage(Prompts.BRIEF_PROMPT.formatted(LocalDateTime.now())));
 
         Generation response = chatModel.call(new Prompt(histories)).getResult();
-        String text = response.getOutput().getText();
-        AssertUtil.isNotNull(text, "AI未返回澄清结果");
-        ResearchBrief convert = briefConverter.convert(text);
-        histories.add(new AssistantMessage(text));
+        String researchBrief = response.getOutput().getText();
+        AssertUtil.isNotNull(researchBrief, "AI未返回澄清结果");
+        histories.add(new AssistantMessage(researchBrief));
 
         // 生成总结回复
         histories.add(new UserMessage(Prompts.SUMMARY_PROMPT.formatted(message)));
@@ -236,12 +219,19 @@ public class ChatService {
         handleStreamingResponse(stream, session, message, emitter);
 
         // 保存研究简报到session
-        session.setResearchBrief(text);
+        session.setResearchBrief(researchBrief);
         sessionRepository.save(session);
         log.info("Saved research brief for sessionId: {}", session.getSessionId());
 
         // TODO: 在这里启动sub-agent执行具体的研究任务
-        // startSubAgentStream(session, message, emitter);
+
+        SupervisorAgentContext supervisorAgentContext = SupervisorAgentContext.builder()
+                .sessionId(session.getSessionId())
+                .researchBrief(researchBrief)
+                .maxSubAgentsNumber(10L)
+                .build();
+
+        researchService.startResearch(supervisorAgentContext);
 
         updateSessionStatus(session, SessionStatus.RUNNING);
     }

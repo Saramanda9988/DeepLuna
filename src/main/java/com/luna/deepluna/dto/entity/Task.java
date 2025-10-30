@@ -1,15 +1,13 @@
 package com.luna.deepluna.dto.entity;
 
 import com.luna.deepluna.common.enums.AgentTypeEnums;
-import com.luna.deepluna.common.enums.TaskStatus;
+import com.luna.deepluna.common.enums.SubAgentTaskStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -42,7 +40,7 @@ public class Task {
     
     @Enumerated(EnumType.ORDINAL)
     @Column(name = "status", nullable = false)
-    private TaskStatus status;
+    private SubAgentTaskStatus status;
     
     @CreationTimestamp
     @Column(name = "started_time", nullable = false)

@@ -1,7 +1,7 @@
 package com.luna.deepluna.repository;
 
 import com.luna.deepluna.dto.entity.Task;
-import com.luna.deepluna.common.enums.TaskStatus;
+import com.luna.deepluna.common.enums.SubAgentTaskStatus;
 import com.luna.deepluna.common.enums.AgentTypeEnums;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -22,7 +22,7 @@ public interface TaskRepository extends JpaRepository<Task, String> {
     /**
      * 根据会话ID和状态查找任务
      */
-    List<Task> findBySessionIdAndStatus(String sessionId, TaskStatus status);
+    List<Task> findBySessionIdAndStatus(String sessionId, SubAgentTaskStatus status);
     
     /**
      * 根据会话ID和代理类型查找任务
