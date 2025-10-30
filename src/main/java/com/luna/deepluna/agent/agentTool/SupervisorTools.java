@@ -49,6 +49,7 @@ public class SupervisorTools {
 
     @Tool(description = "用于研究过程中的反思与策略规划")
     public String thinkTool() {
-
+        // TODO: 实现监督者智能体的反思与策略规划逻辑
+        return "";
     }
 }
