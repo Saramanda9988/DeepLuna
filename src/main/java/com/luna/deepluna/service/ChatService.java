@@ -8,7 +8,6 @@ import com.luna.deepluna.common.prompt.Prompts;
 import com.luna.deepluna.common.utils.AssertUtil;
 import com.luna.deepluna.dto.entity.ChatHistory;
 import com.luna.deepluna.dto.entity.Session;
-import com.luna.deepluna.dto.jsonConvert.ClarifyResult;
 import com.luna.deepluna.dto.request.ChatRequest;
 import com.luna.deepluna.dto.response.ChatResp;
 import com.luna.deepluna.dto.response.ClarifyChatResponse;
@@ -43,6 +42,8 @@ import java.util.concurrent.ConcurrentMap;
 @Service
 @RequiredArgsConstructor
 public class ChatService {
+
+    public record ClarifyResult(Boolean isClear) {}
 
     @JsonPropertyOrder({ "isClear" })
     private final BeanOutputConverter<ClarifyResult> checkConverter = new BeanOutputConverter<>(ClarifyResult.class);
