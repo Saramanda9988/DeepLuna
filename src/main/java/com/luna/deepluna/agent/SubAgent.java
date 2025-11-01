@@ -74,8 +74,11 @@ public class SubAgent {
         while (response.hasToolCalls()) {
             Generation result = response.getResult();
             chatMemory.add(subAgentId, result.getOutput());
-
+            List<AssistantMessage.ToolCall> toolCalls = response.getResult().getOutput().getToolCalls();
+            log.info("Sub Agent executing tool calls: subAgentId={}, toolCalls={}", subAgentId, toolCalls);
             ToolExecutionResult executionResult = toolCallingManager.executeToolCalls(promptWithMemory, response);
+            log.info("Sub Agent received tool execution result: subAgentId={}, toolResults={}",
+                    subAgentId, executionResult.conversationHistory().getLast());
             chatMemory.add(subAgentId, executionResult.conversationHistory().getLast());
 
             promptWithMemory = new Prompt(chatMemory.get(subAgentId), chatOptions);
@@ -85,6 +88,7 @@ public class SubAgent {
         // 最终响应处理
         chatMemory.add(subAgentId,
                 new AssistantMessage(Prompts.COMPRESS_RESEARCH_SYSTEM_PROMPT.formatted(LocalDateTime.now())));
+        log.info("Sub Agent starting compression: subAgentId={}", subAgentId);
         Generation result = chatModel.call(new Prompt(chatMemory.get(subAgentId))).getResult();
         String compressResp = result.getOutput().getText();
         AssertUtil.isFalse(compressResp == null || compressResp.isEmpty(), "压缩结果为空");

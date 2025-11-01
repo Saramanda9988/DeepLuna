@@ -103,7 +103,6 @@ public class SupervisorAgent {
 
             long conductResearch = toolCalls.stream().filter(tc -> tc.name().equals("conductResearch")).count();
 
-            int size = chatMemory.get(supervisorId).size();
             if (conductResearch > supervisorAgentContext.getMaxSubAgentsNumber()) {
                 log.warn("Reached max sub-agents limit: supervisorId={}, sessionId={}",
                         supervisorId, supervisorAgentContext.getSessionId());
@@ -114,11 +113,13 @@ public class SupervisorAgent {
                 chatMemory.add(supervisorId, new UserMessage("不能同时进行研究和反思，请选择其一。"));
             } else {
                 ToolExecutionResult executionResult = toolCallingManager.executeToolCalls(promptWithMemory, response);
-                List<Message> newAns = executionResult.conversationHistory().subList(size + 1, executionResult.conversationHistory().size());
-                chatMemory.add(supervisorId, newAns);
+                log.info("Supervisor Agent executed tool calls: supervisorId={}, sessionId={}",
+                        supervisorId, supervisorAgentContext.getSessionId());
+                Message message = executionResult.conversationHistory().getLast();
+                chatMemory.add(supervisorId, message);
                 if (!isThink) {
                     // 如果不是思考，则把子任务的结果加入到笔记中,方便最后进行总结
-                    supervisorAgentContext.getNotes().addAll(newAns.stream().map(Message::getText).toList());
+                    supervisorAgentContext.getNotes().add(message.getText());
                 }
             }
 
