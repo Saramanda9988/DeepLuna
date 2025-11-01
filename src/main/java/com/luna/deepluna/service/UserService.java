@@ -1,10 +1,10 @@
 package com.luna.deepluna.service;
 
 import com.luna.deepluna.common.utils.AssertUtil;
-import com.luna.deepluna.dto.request.LoginRequest;
-import com.luna.deepluna.dto.request.RegisterRequest;
-import com.luna.deepluna.dto.response.UserResponse;
-import com.luna.deepluna.dto.entity.User;
+import com.luna.deepluna.domain.request.LoginRequest;
+import com.luna.deepluna.domain.request.RegisterRequest;
+import com.luna.deepluna.domain.response.UserResponse;
+import com.luna.deepluna.domain.entity.User;
 import com.luna.deepluna.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

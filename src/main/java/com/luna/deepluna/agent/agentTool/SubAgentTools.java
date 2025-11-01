@@ -3,9 +3,9 @@ package com.luna.deepluna.agent.agentTool;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.luna.deepluna.common.exception.BusinessException;
-import com.luna.deepluna.dto.request.websearch.TavilyWebSearchRequestBody;
-import com.luna.deepluna.dto.request.websearch.WebSearchRequestBody;
-import com.luna.deepluna.dto.response.websearch.TavilySearchResponse;
+import com.luna.deepluna.domain.request.websearch.TavilyWebSearchRequestBody;
+import com.luna.deepluna.domain.request.websearch.WebSearchRequestBody;
+import com.luna.deepluna.domain.response.websearch.TavilySearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -14,13 +14,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Map;
 
 @Component
 @RequiredArgsConstructor

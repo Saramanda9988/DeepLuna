@@ -1,10 +1,10 @@
 package com.luna.deepluna.controller;
 
 import com.luna.deepluna.common.domain.ApiResult;
-import com.luna.deepluna.dto.request.CreateSessionRequest;
-import com.luna.deepluna.dto.request.UpdateSessionRequest;
-import com.luna.deepluna.dto.response.SessionDetailResponse;
-import com.luna.deepluna.dto.response.SessionResponse;
+import com.luna.deepluna.domain.request.CreateSessionRequest;
+import com.luna.deepluna.domain.request.UpdateSessionRequest;
+import com.luna.deepluna.domain.response.SessionDetailResponse;
+import com.luna.deepluna.domain.response.SessionResponse;
 import com.luna.deepluna.service.SessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

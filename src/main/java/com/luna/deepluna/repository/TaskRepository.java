@@ -1,6 +1,6 @@
 package com.luna.deepluna.repository;
 
-import com.luna.deepluna.dto.entity.Task;
+import com.luna.deepluna.domain.entity.Task;
 import com.luna.deepluna.common.enums.SubAgentTaskStatus;
 import com.luna.deepluna.common.enums.AgentTypeEnums;
 import org.springframework.data.jpa.repository.JpaRepository;

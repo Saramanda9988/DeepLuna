@@ -1,8 +1,8 @@
 package com.luna.deepluna.controller;
 
 import com.luna.deepluna.common.domain.ApiResult;
-import com.luna.deepluna.dto.request.ModelRequest;
-import com.luna.deepluna.dto.response.ModelResponse;
+import com.luna.deepluna.domain.request.ModelRequest;
+import com.luna.deepluna.domain.response.ModelResponse;
 import com.luna.deepluna.service.ModelService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

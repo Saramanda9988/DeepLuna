@@ -2,9 +2,7 @@ package com.luna.deepluna.controller;
 
 
 import com.luna.deepluna.common.client.SseTransportClient;
-import com.luna.deepluna.common.domain.ApiResult;
-import com.luna.deepluna.dto.request.ChatRequest;
-import com.luna.deepluna.dto.response.ChatResp;
+import com.luna.deepluna.domain.request.ChatRequest;
 import com.luna.deepluna.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,7 +37,7 @@ public class ChatController {
 
         SseEmitter sseEmitter = sseTransportClient.createConnection(30000L);
 
-        chatService.processChatStream(request, sseEmitter);
+        chatService.processChat(request, sseEmitter);
         
         return sseEmitter;
     }

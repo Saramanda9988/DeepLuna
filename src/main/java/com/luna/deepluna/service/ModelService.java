@@ -1,9 +1,9 @@
 package com.luna.deepluna.service;
 
 import com.luna.deepluna.common.exception.BusinessException;
-import com.luna.deepluna.dto.request.ModelRequest;
-import com.luna.deepluna.dto.response.ModelResponse;
-import com.luna.deepluna.dto.entity.Model;
+import com.luna.deepluna.domain.request.ModelRequest;
+import com.luna.deepluna.domain.response.ModelResponse;
+import com.luna.deepluna.domain.entity.Model;
 import com.luna.deepluna.repository.ModelRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

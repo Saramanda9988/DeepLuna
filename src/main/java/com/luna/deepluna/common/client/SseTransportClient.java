@@ -1,8 +1,7 @@
 package com.luna.deepluna.common.client;
 
-import com.luna.deepluna.common.enums.SessionStatus;
 import com.luna.deepluna.common.exception.BusinessException;
-import com.luna.deepluna.dto.response.ChatResp;
+import com.luna.deepluna.domain.response.ChatResp;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;

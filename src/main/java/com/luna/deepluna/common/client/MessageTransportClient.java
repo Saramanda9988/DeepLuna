@@ -1,6 +1,6 @@
 package com.luna.deepluna.common.client;
 
-import com.luna.deepluna.dto.response.ChatResp;
+import com.luna.deepluna.domain.response.ChatResp;
 
 /**
  * 消息传输接口，用于抽象不同的消息传输方式(SSE、WebSocket等)

@@ -9,6 +9,8 @@ import com.luna.deepluna.common.utils.AssertUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -24,6 +26,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -38,7 +41,21 @@ public class SubAgent {
 
     private final ContextCache contextCache;
 
-    public String startSubAgentResearch(String subAgentId) {
+    public String startSubAgentResearch(String researchTopic) {
+        SubAgentContext context = SubAgentContext.builder()
+                .chatMemory(MessageWindowChatMemory.builder()
+                        .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                        .build())
+                .researchTopic(researchTopic)
+                .maxSubReflections(5)
+                .status(SubAgentTaskStatus.PENDING)
+                .subAgentId(UUID.randomUUID().toString())
+                .build();
+        contextCache.putSubAgent(context.getSubAgentId(), context);
+        return subAgent(context.getSubAgentId());
+    }
+
+    private String subAgent(String subAgentId) {
         SubAgentContext subAgent = contextCache.getSubAgent(subAgentId);
         ChatMemory chatMemory = subAgent.getChatMemory();
         chatMemory.add(subAgentId, new AssistantMessage(Prompts.SUB_AGENT_PROMPT.formatted(LocalDateTime.now())));

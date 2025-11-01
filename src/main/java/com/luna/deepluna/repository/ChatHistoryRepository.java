@@ -1,6 +1,6 @@
 package com.luna.deepluna.repository;
 
-import com.luna.deepluna.dto.entity.ChatHistory;
+import com.luna.deepluna.domain.entity.ChatHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

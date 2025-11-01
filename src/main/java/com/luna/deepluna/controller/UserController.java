@@ -1,9 +1,9 @@
 package com.luna.deepluna.controller;
 
 import com.luna.deepluna.common.domain.ApiResult;
-import com.luna.deepluna.dto.request.LoginRequest;
-import com.luna.deepluna.dto.request.RegisterRequest;
-import com.luna.deepluna.dto.response.UserResponse;
+import com.luna.deepluna.domain.request.LoginRequest;
+import com.luna.deepluna.domain.request.RegisterRequest;
+import com.luna.deepluna.domain.response.UserResponse;
 import com.luna.deepluna.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

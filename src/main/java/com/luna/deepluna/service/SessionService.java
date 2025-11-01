@@ -1,11 +1,11 @@
 package com.luna.deepluna.service;
 
 import com.luna.deepluna.common.enums.SessionStatus;
-import com.luna.deepluna.dto.request.CreateSessionRequest;
-import com.luna.deepluna.dto.request.UpdateSessionRequest;
-import com.luna.deepluna.dto.response.SessionDetailResponse;
-import com.luna.deepluna.dto.response.SessionResponse;
-import com.luna.deepluna.dto.entity.Session;
+import com.luna.deepluna.domain.request.CreateSessionRequest;
+import com.luna.deepluna.domain.request.UpdateSessionRequest;
+import com.luna.deepluna.domain.response.SessionDetailResponse;
+import com.luna.deepluna.domain.response.SessionResponse;
+import com.luna.deepluna.domain.entity.Session;
 import com.luna.deepluna.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

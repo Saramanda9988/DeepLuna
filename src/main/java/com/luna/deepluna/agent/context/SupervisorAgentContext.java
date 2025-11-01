@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.ai.chat.memory.ChatMemory;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -22,11 +23,8 @@ public class SupervisorAgentContext {
     // 整个流程的监督者ID
     private String supervisorId;
 
-    // 各个子任务的状态
-    private Map<String, SubAgentTaskStatus> subTaskStatus;
-
-    // 各个子任务的结果
-    private Map<String, Object> results;
+    // 各个子任务的结果,作为自己的记录笔记
+    private List<String> notes;
 
     // 这个流程的研究简报
     private String researchBrief;

@@ -1,6 +1,6 @@
 package com.luna.deepluna.repository;
 
-import com.luna.deepluna.dto.entity.Session;
+import com.luna.deepluna.domain.entity.Session;
 import com.luna.deepluna.common.enums.SessionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

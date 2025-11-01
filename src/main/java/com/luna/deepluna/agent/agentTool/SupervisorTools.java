@@ -26,17 +26,7 @@ public class SupervisorTools {
 
     @Tool(description = "将研究任务委派给专业子智能体")
     public String conductResearch(@ToolParam(description = "子智能体的研究主题") String researchTopic) {
-        SubAgentContext context = SubAgentContext.builder()
-                .chatMemory(MessageWindowChatMemory.builder()
-                        .chatMemoryRepository(new InMemoryChatMemoryRepository())
-                        .build())
-                .researchTopic(researchTopic)
-                .maxSubReflections(5)
-                .status(SubAgentTaskStatus.PENDING)
-                .subAgentId(UUID.randomUUID().toString())
-                .build();
-        contextCache.putSubAgent(context.getSubAgentId(), context);
-        return subAgent.startSubAgentResearch(context.getSubAgentId());
+        return subAgent.startSubAgentResearch(researchTopic);
     }
 
     @Tool(description = "表明研究已完成")

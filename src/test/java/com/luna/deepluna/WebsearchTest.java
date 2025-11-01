@@ -11,10 +11,9 @@ import com.luna.deepluna.common.enums.SupervisorAgentState;
 import com.luna.deepluna.common.exception.BusinessException;
 import com.luna.deepluna.common.prompt.Prompts;
 import com.luna.deepluna.common.utils.AssertUtil;
-import com.luna.deepluna.dto.request.websearch.TavilyWebSearchRequestBody;
-import com.luna.deepluna.dto.request.websearch.WebSearchRequestBody;
-import com.luna.deepluna.dto.response.websearch.TavilySearchResponse;
-import lombok.AllArgsConstructor;
+import com.luna.deepluna.domain.request.websearch.TavilyWebSearchRequestBody;
+import com.luna.deepluna.domain.request.websearch.WebSearchRequestBody;
+import com.luna.deepluna.domain.response.websearch.TavilySearchResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -31,7 +30,6 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.support.ToolCallbacks;
-import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -135,6 +133,7 @@ public class WebsearchTest {
 
         Prompt promptWithMemory = new Prompt(chatMemory.get(supervisorId), chatOptions);
 
+        log.info("call");
         ChatResponse response = chatModel.call(promptWithMemory);
         while (response.hasToolCalls()) {
             Generation result = response.getResult();
@@ -158,6 +157,7 @@ public class WebsearchTest {
             }
 
             promptWithMemory = new Prompt(chatMemory.get(supervisorId), chatOptions);
+            log.info("call");
             response = chatModel.call(promptWithMemory);
         }
     }
