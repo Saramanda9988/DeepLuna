@@ -283,7 +283,7 @@ public class ChatService {
         histories.add(new UserMessage(Prompts.SUMMARY_PROMPT.formatted(message)));
         Flux<ChatResponse> stream = chatModel.stream(new Prompt(histories));
 
-        asyncHandleStreamingResponse(stream, session, message, emitter);
+        handleStreamingResponse(stream, session, message, emitter);
 
         // 保存研究简报到session
         session.setResearchBrief(researchBrief);
