@@ -31,5 +31,5 @@ public class SubAgentContext {
     private ChatMemory chatMemory;
 
     // 最大反思次数
-    private long maxSubReflections;
+    private Integer maxWebSearch;
 }

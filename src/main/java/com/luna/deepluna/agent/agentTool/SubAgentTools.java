@@ -8,6 +8,7 @@ import com.luna.deepluna.domain.request.websearch.WebSearchRequestBody;
 import com.luna.deepluna.domain.response.websearch.TavilySearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +20,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 @RequiredArgsConstructor
@@ -34,8 +36,15 @@ public class SubAgentTools {
 
     // TODO: 这里是写死的使用Tavily搜索，后续可以支持更多搜索引擎和配置选项
     @Tool(description = "请求网络查询")
-    public TavilySearchResponse webSearch(String query) {
+    public TavilySearchResponse webSearch(String query, ToolContext toolContext) {
         log.info("SubAgentTools#webSearch called with query: {}", query);
+        AtomicInteger count = (AtomicInteger) toolContext.getContext().get("count");
+        Integer maxUsage = (Integer) toolContext.getContext().get("max");
+
+        if (count.incrementAndGet() > maxUsage) {
+            throw new RuntimeException("webSearch#已达到最大使用次数限制: " + maxUsage);
+        }
+
         WebSearchRequestBody body = TavilyWebSearchRequestBody.toDefaultWebSearchRequest(query);
         String s;
         try {

@@ -42,7 +42,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @SpringBootTest
 @Slf4j
@@ -186,7 +189,7 @@ public class WebsearchTest {
                         .chatMemoryRepository(new InMemoryChatMemoryRepository())
                         .build())
                 .researchTopic("人工智能的发展前景")
-                .maxSubReflections(5)
+                .maxWebSearch(1)
                 .status(SubAgentTaskStatus.PENDING)
                 .subAgentId("sub-agent-001")
                 .build();
@@ -198,8 +201,13 @@ public class WebsearchTest {
         subAgent.setStatus(SubAgentTaskStatus.IN_PROGRESS);
         log.info("Sub Agent started: subAgentId={}", subAgentId);
 
+        Map<String, Object> webSearchUsage = new HashMap<>();
+        webSearchUsage.put("count", new AtomicInteger(0));
+        webSearchUsage.put("max", subAgent.getMaxWebSearch());
+
         ChatOptions chatOptions = ToolCallingChatOptions.builder()
                 .toolCallbacks(ToolCallbacks.from(subAgentTools))
+                .toolContext(webSearchUsage)
                 .internalToolExecutionEnabled(false)
                 .build();
 
@@ -208,9 +216,12 @@ public class WebsearchTest {
         ChatResponse response = chatModel.call(promptWithMemory);
         while (response.hasToolCalls()) {
             Generation result = response.getResult();
+            log.info("Sub Agent received tool calls: subAgentId={}, toolCalls={}", subAgentId, result.getOutput().getToolCalls());
             chatMemory.add(subAgentId, result.getOutput());
 
             ToolExecutionResult executionResult = toolCallingManager.executeToolCalls(promptWithMemory, response);
+            log.info("Sub Agent received tool execution result: subAgentId={}, toolResults={}",
+                    subAgentId, executionResult.conversationHistory().getLast());
             chatMemory.add(subAgentId, executionResult.conversationHistory().getLast());
 
             promptWithMemory = new Prompt(chatMemory.get(subAgentId), chatOptions);

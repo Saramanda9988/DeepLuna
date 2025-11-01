@@ -7,6 +7,7 @@ import com.luna.deepluna.common.enums.SubAgentTaskStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -25,7 +26,7 @@ public class SupervisorTools {
     private final ContextCache contextCache;
 
     @Tool(description = "将研究任务委派给专业子智能体")
-    public String conductResearch(@ToolParam(description = "子智能体的研究主题") String researchTopic) {
+    public String conductResearch(@ToolParam(description = "子智能体的研究主题") String researchTopic, ToolContext toolContext) {
         return subAgent.startSubAgentResearch(researchTopic);
     }
 

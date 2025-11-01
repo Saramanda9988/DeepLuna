@@ -25,8 +25,11 @@ import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Service
@@ -47,7 +50,7 @@ public class SubAgent {
                         .chatMemoryRepository(new InMemoryChatMemoryRepository())
                         .build())
                 .researchTopic(researchTopic)
-                .maxSubReflections(5)
+                .maxWebSearch(5)
                 .status(SubAgentTaskStatus.PENDING)
                 .subAgentId(UUID.randomUUID().toString())
                 .build();
@@ -63,8 +66,13 @@ public class SubAgent {
         subAgent.setStatus(SubAgentTaskStatus.IN_PROGRESS);
         log.info("Sub Agent started: subAgentId={}", subAgentId);
 
+        Map<String, Object> webSearchUsage = new HashMap<>();
+        webSearchUsage.put("count", new AtomicInteger(0));
+        webSearchUsage.put("max", subAgent.getMaxWebSearch());
+
         ChatOptions chatOptions = ToolCallingChatOptions.builder()
                 .toolCallbacks(ToolCallbacks.from(subAgentTools))
+                .toolContext(webSearchUsage)
                 .internalToolExecutionEnabled(false)
                 .build();
 
@@ -75,7 +83,10 @@ public class SubAgent {
             Generation result = response.getResult();
             chatMemory.add(subAgentId, result.getOutput());
             List<AssistantMessage.ToolCall> toolCalls = response.getResult().getOutput().getToolCalls();
+
+            // 统计 webSearch 工具调用次数
             log.info("Sub Agent executing tool calls: subAgentId={}, toolCalls={}", subAgentId, toolCalls);
+
             ToolExecutionResult executionResult = toolCallingManager.executeToolCalls(promptWithMemory, response);
             log.info("Sub Agent received tool execution result: subAgentId={}, toolResults={}",
                     subAgentId, executionResult.conversationHistory().getLast());
