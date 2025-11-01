@@ -11,6 +11,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -22,6 +23,7 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,7 +56,15 @@ public class ResearchService {
         SupervisorAgentContext supervisorAgentContext = contextCache.getSupervisor(sessionId);
         String supervisorId = supervisorAgentContext.getSupervisorId();
         ChatMemory chatMemory = supervisorAgentContext.getChatMemory();
-        chatMemory.add(supervisorId, new AssistantMessage(Prompts.SUPERVISOR_PROMPT.formatted()));
+
+        // 初始化对话记忆,注入初始提示语和研究简报
+        chatMemory.add(supervisorId, new AssistantMessage(Prompts.SUPERVISOR_PROMPT.formatted(
+                LocalDateTime.now(),
+                5,
+                supervisorAgentContext.getMaxSubAgentsNumber()
+        )));
+        chatMemory.add(supervisorId, new UserMessage("Research Brief:" + supervisorAgentContext.getResearchBrief()));
+
         log.info("Supervisor Agent started: supervisorId={}, sessionId={}",
                 supervisorId, supervisorAgentContext.getSessionId());
         // 设置状态为运行中
@@ -70,6 +80,8 @@ public class ResearchService {
         ChatResponse response = chatModel.call(promptWithMemory);
         while (response.hasToolCalls()) {
             Generation result = response.getResult();
+            // 记录调用工具信息到对话记忆
+            chatMemory.add(supervisorId, response.getResult().getOutput());
             List<AssistantMessage.ToolCall> toolCalls = result.getOutput().getToolCalls();
             List<AssistantMessage.ToolCall> researchComplete = toolCalls.stream().filter(toolCall -> toolCall.name().equals("researchComplete")).toList();
             if (!researchComplete.isEmpty()) {

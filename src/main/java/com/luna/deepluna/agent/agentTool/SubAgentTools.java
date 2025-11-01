@@ -7,7 +7,9 @@ import com.luna.deepluna.dto.request.websearch.TavilyWebSearchRequestBody;
 import com.luna.deepluna.dto.request.websearch.WebSearchRequestBody;
 import com.luna.deepluna.dto.response.websearch.TavilySearchResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +24,7 @@ import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class SubAgentTools {
 
     @Value("${websearch.tavily.api.key}")
@@ -34,7 +37,7 @@ public class SubAgentTools {
     // TODO: 这里是写死的使用Tavily搜索，后续可以支持更多搜索引擎和配置选项
     @Tool(description = "请求网络查询")
     public TavilySearchResponse webSearch(String query) {
-
+        log.info("SubAgentTools#webSearch called with query: {}", query);
         WebSearchRequestBody body = TavilyWebSearchRequestBody.toDefaultWebSearchRequest(query);
         String s;
         try {
@@ -63,8 +66,7 @@ public class SubAgentTools {
     }
 
     @Tool(description = "用于研究过程中的反思与策略规划")
-    public String thinkTool() {
-        // TODO: 实现子智能体的反思与策略规划逻辑
-        return "";
+    public String thinkTool(@ToolParam(description = "智能体的反思内容") String reflectionInput) {
+        return "[Reflection Result] " + reflectionInput;
     }
 }

@@ -1,0 +1,212 @@
+package com.luna.deepluna;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.luna.deepluna.agent.agentTool.SubAgentTools;
+import com.luna.deepluna.agent.agentTool.SupervisorTools;
+import com.luna.deepluna.agent.context.SubAgentContext;
+import com.luna.deepluna.agent.context.SupervisorAgentContext;
+import com.luna.deepluna.common.enums.SubAgentTaskStatus;
+import com.luna.deepluna.common.enums.SupervisorAgentState;
+import com.luna.deepluna.common.exception.BusinessException;
+import com.luna.deepluna.common.prompt.Prompts;
+import com.luna.deepluna.common.utils.AssertUtil;
+import com.luna.deepluna.dto.request.websearch.TavilyWebSearchRequestBody;
+import com.luna.deepluna.dto.request.websearch.WebSearchRequestBody;
+import com.luna.deepluna.dto.response.websearch.TavilySearchResponse;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.deepseek.DeepSeekChatModel;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.model.tool.ToolExecutionResult;
+import org.springframework.ai.support.ToolCallbacks;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.context.SpringBootTest;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
+
+@SpringBootTest
+@Slf4j
+public class WebsearchTest {
+
+    @Value("${websearch.tavily.api.key}")
+    public String tavilyApiKey;
+
+    @Autowired
+    HttpClient httpClient;
+
+    @Autowired
+    ObjectMapper objectMapper;
+
+    @Autowired
+    SupervisorTools supervisorTools;
+
+    @Autowired
+    SubAgentTools subAgentTools;
+
+    @Autowired
+    DeepSeekChatModel chatModel;
+
+    @Autowired
+    ToolCallingManager toolCallingManager;
+
+    @Test
+    public void webSearch() {
+
+        WebSearchRequestBody body = TavilyWebSearchRequestBody.toDefaultWebSearchRequest("人工智能的发展前景");
+        String s;
+        try {
+            s = objectMapper.writeValueAsString(body);
+        } catch (JsonProcessingException e) {
+            throw new BusinessException("webSearch#请求参数序列化失败: " + e.getMessage());
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.tavily.com/search"))
+                .header("Authorization", "Bearer " + tavilyApiKey)
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofMinutes(10)) // 设置超时时间为10分钟
+                .POST(HttpRequest.BodyPublishers.ofString(s))
+                .build();
+
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new BusinessException("webSearch#网络请求失败，状态码: " + response.statusCode() + ", 错误信息: " + response.body());
+            }
+            TavilySearchResponse tavilySearchResponse = objectMapper.readValue(response.body(), TavilySearchResponse.class);
+            System.out.println(tavilySearchResponse.toString());
+        } catch (InterruptedException | IOException e) {
+            throw new BusinessException("webSearch#网络请求失败: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testSupervisorAgent() {
+        SupervisorAgentContext supervisorAgentContext = SupervisorAgentContext.builder()
+                .sessionId("test-session-001")
+                .maxSubAgentsNumber(5)
+                .supervisorId("supervisor-001")
+                .status(SupervisorAgentState.INITIALIZING)
+                .chatMemory(MessageWindowChatMemory.builder()
+                        .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                        .build())
+                .researchBrief("研究人工智能的发展前景")
+                .build();
+        String supervisorId = supervisorAgentContext.getSupervisorId();
+        ChatMemory chatMemory = supervisorAgentContext.getChatMemory();
+        chatMemory.add(supervisorId, new AssistantMessage(Prompts.SUPERVISOR_PROMPT.formatted(
+                LocalDateTime.now(),
+                5,
+                supervisorAgentContext.getMaxSubAgentsNumber()
+        )));
+        chatMemory.add(supervisorId, new UserMessage("Research Brief:" + """
+                # 拉康精神分析历史研究简报\\n\\n本简报概述雅克·拉康精神分析理论的发展历程，重点关注其核心概念演变与当代应用价值。\\n\\n## 核心要点\\n- 从镜像阶段到三界理论的完整发展脉络\\n- 与弗洛伊德传统的继承与断裂关系\\n- 巴黎弗洛伊德学派创立及机构发展史\\n- 临床实践方法（如短会谈）的形成过程\\n- 对当代文化理论与心理治疗的持续影响\\n\\n## 当前趋势\\n拉康理论在数字主体性、后现代身份认同研究中重新获得关注\\n\\n## 交付成果\\n完整的历史发展时间线图（PDF）+ 核心概念演变分析报告\\n\\n## 决策价值\\n理解拉康思想能为组织提供深层心理动力分析工具，适用于文化研究、领导力发展等领域。
+                """));
+        log.info("Supervisor Agent started: supervisorId={}, sessionId={}",
+                supervisorId, supervisorAgentContext.getSessionId());
+        // 设置状态为运行中
+        supervisorAgentContext.setStatus(SupervisorAgentState.RUNNING);
+
+        ChatOptions chatOptions = ToolCallingChatOptions.builder()
+                .toolCallbacks(ToolCallbacks.from(supervisorTools))
+                .internalToolExecutionEnabled(false)
+                .build();
+
+        Prompt promptWithMemory = new Prompt(chatMemory.get(supervisorId), chatOptions);
+
+        ChatResponse response = chatModel.call(promptWithMemory);
+        while (response.hasToolCalls()) {
+            Generation result = response.getResult();
+            chatMemory.add(supervisorId, response.getResult().getOutput());
+            List<AssistantMessage.ToolCall> toolCalls = result.getOutput().getToolCalls();
+            List<AssistantMessage.ToolCall> researchComplete = toolCalls.stream().filter(toolCall -> toolCall.name().equals("researchComplete")).toList();
+            if (!researchComplete.isEmpty()) {
+                log.info("Research completed by Supervisor Agent: supervisorId={}, sessionId={}",
+                        supervisorId, supervisorAgentContext.getSessionId());
+                supervisorAgentContext.setStatus(SupervisorAgentState.COMPLETED);
+                break;
+            }
+            long conductResearch = toolCalls.stream().filter(tc -> tc.name().equals("conductResearch")).count();
+            if (conductResearch > supervisorAgentContext.getMaxSubAgentsNumber()) {
+                log.warn("Reached max sub-agents limit: supervisorId={}, sessionId={}",
+                        supervisorId, supervisorAgentContext.getSessionId());
+                chatMemory.add(supervisorId, new AssistantMessage("一次启动的数量过多，请减少一次启动的子智能体数量。"));
+            } else {
+                ToolExecutionResult executionResult = toolCallingManager.executeToolCalls(promptWithMemory, response);
+                chatMemory.add(supervisorId, executionResult.conversationHistory().getLast());
+            }
+
+            promptWithMemory = new Prompt(chatMemory.get(supervisorId), chatOptions);
+            response = chatModel.call(promptWithMemory);
+        }
+    }
+
+    @Test
+    public void startSubAgentResearch() {
+        SubAgentContext subAgent = SubAgentContext.builder()
+                .chatMemory(MessageWindowChatMemory.builder()
+                        .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                        .build())
+                .researchTopic("人工智能的发展前景")
+                .maxSubReflections(5)
+                .status(SubAgentTaskStatus.PENDING)
+                .subAgentId("sub-agent-001")
+                .build();
+
+        String subAgentId = subAgent.getSubAgentId();
+        ChatMemory chatMemory = subAgent.getChatMemory();
+        chatMemory.add(subAgentId, new AssistantMessage(Prompts.SUB_AGENT_PROMPT.formatted(LocalDateTime.now())));
+        chatMemory.add(subAgentId, new UserMessage("Research Topic" + subAgent.getResearchTopic()));
+        subAgent.setStatus(SubAgentTaskStatus.IN_PROGRESS);
+        log.info("Sub Agent started: subAgentId={}", subAgentId);
+
+        ChatOptions chatOptions = ToolCallingChatOptions.builder()
+                .toolCallbacks(ToolCallbacks.from(subAgentTools))
+                .internalToolExecutionEnabled(false)
+                .build();
+
+        Prompt promptWithMemory = new Prompt(chatMemory.get(subAgentId), chatOptions);
+
+        ChatResponse response = chatModel.call(promptWithMemory);
+        while (response.hasToolCalls()) {
+            Generation result = response.getResult();
+            chatMemory.add(subAgentId, result.getOutput());
+
+            ToolExecutionResult executionResult = toolCallingManager.executeToolCalls(promptWithMemory, response);
+            chatMemory.add(subAgentId, executionResult.conversationHistory().getLast());
+
+            promptWithMemory = new Prompt(chatMemory.get(subAgentId), chatOptions);
+            response = chatModel.call(promptWithMemory);
+        }
+
+        // 最终响应处理
+        chatMemory.add(subAgentId,
+                new AssistantMessage(Prompts.COMPRESS_RESEARCH_SYSTEM_PROMPT.formatted(LocalDateTime.now())));
+        Generation result = chatModel.call(new Prompt(chatMemory.get(subAgentId))).getResult();
+        String compressResp = result.getOutput().getText();
+        AssertUtil.isFalse(compressResp == null || compressResp.isEmpty(), "压缩结果为空");
+        subAgent.setStatus(SubAgentTaskStatus.COMPLETED);
+        log.info("Sub Agent completed: subAgentId={}", subAgentId);
+    }
+}

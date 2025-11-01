@@ -12,10 +12,7 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 @Component
 @RequiredArgsConstructor
@@ -48,8 +45,7 @@ public class SupervisorTools {
     }
 
     @Tool(description = "用于研究过程中的反思与策略规划")
-    public String thinkTool() {
-        // TODO: 实现监督者智能体的反思与策略规划逻辑
-        return "";
+    public String thinkTool(@ToolParam(description = "监督者智能体的反思内容") String reflectionInput) {
+        return "[Reflection Result] " + reflectionInput;
     }
 }

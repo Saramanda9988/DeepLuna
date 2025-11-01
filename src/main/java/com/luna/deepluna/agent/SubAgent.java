@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -41,6 +42,7 @@ public class SubAgent {
         SubAgentContext subAgent = contextCache.getSubAgent(subAgentId);
         ChatMemory chatMemory = subAgent.getChatMemory();
         chatMemory.add(subAgentId, new AssistantMessage(Prompts.SUB_AGENT_PROMPT.formatted(LocalDateTime.now())));
+        chatMemory.add(subAgentId, new UserMessage("Research Topic" + subAgent.getResearchTopic()));
         subAgent.setStatus(SubAgentTaskStatus.IN_PROGRESS);
         log.info("Sub Agent started: subAgentId={}", subAgentId);
 
@@ -53,9 +55,8 @@ public class SubAgent {
 
         ChatResponse response = chatModel.call(promptWithMemory);
         while (response.hasToolCalls()) {
-            List<AssistantMessage.ToolCall> toolCalls = response.getResult()
-                    .getOutput()
-                    .getToolCalls();
+            Generation result = response.getResult();
+            chatMemory.add(subAgentId, result.getOutput());
 
             ToolExecutionResult executionResult = toolCallingManager.executeToolCalls(promptWithMemory, response);
             chatMemory.add(subAgentId, executionResult.conversationHistory().getLast());

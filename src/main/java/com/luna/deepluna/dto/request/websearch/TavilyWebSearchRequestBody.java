@@ -74,6 +74,7 @@ public class TavilyWebSearchRequestBody implements WebSearchRequestBody {
                 .query(query)
                 .autoParameters(false)
                 .searchDepth("basic")
+                .chunksPerSource(3)
                 .maxResults(1)
                 .includeRawContent("markdown")
                 .includeImages(false)
