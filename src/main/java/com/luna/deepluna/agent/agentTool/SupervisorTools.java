@@ -26,7 +26,7 @@ public class SupervisorTools {
     private final ContextCache contextCache;
 
     @Tool(description = "将研究任务委派给专业子智能体")
-    public String conductResearch(@ToolParam(description = "子智能体的研究主题") String researchTopic, ToolContext toolContext) {
+    public String conductResearch(@ToolParam(description = "子智能体的研究主题") String researchTopic) {
         return subAgent.startSubAgentResearch(researchTopic);
     }
 

@@ -1,12 +1,9 @@
 package com.luna.deepluna.service;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.luna.deepluna.agent.SupervisorAgent;
-import com.luna.deepluna.agent.context.SupervisorAgentContext;
-import com.luna.deepluna.cache.ContextCache;
+import com.luna.deepluna.cache.SessionCache;
 import com.luna.deepluna.common.client.SseTransportClient;
 import com.luna.deepluna.common.enums.SessionStatus;
-import com.luna.deepluna.common.enums.SupervisorAgentState;
 import com.luna.deepluna.common.exception.BusinessException;
 import com.luna.deepluna.common.prompt.Prompts;
 import com.luna.deepluna.common.utils.AssertUtil;
@@ -15,6 +12,7 @@ import com.luna.deepluna.domain.entity.Session;
 import com.luna.deepluna.domain.request.ChatRequest;
 import com.luna.deepluna.domain.response.ChatResp;
 import com.luna.deepluna.domain.response.ClarifyChatResponse;
+import com.luna.deepluna.event.StartResearchEvent;
 import com.luna.deepluna.repository.ChatHistoryRepository;
 import com.luna.deepluna.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,17 +26,15 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 @Slf4j
 @Service
@@ -55,16 +51,12 @@ public class ChatService {
     private final SessionRepository sessionRepository;
     private final ChatHistoryRepository chatHistoryRepository;
     private final SseTransportClient sseTransportClient;
-    private final SupervisorAgent supervisorAgent;
-    private final ContextCache contextCache;
-
-    private final ConcurrentMap<String, Integer> sessionChatRounds = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, Session> activeSessions = new ConcurrentHashMap<>();
+    private final SessionCache sessionCache;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
      * 处理流式聊天请求
      */
-    @Transactional
     public void processChat(ChatRequest request, SseEmitter emitter) {
         log.info("Processing streaming chat request for sessionId: {}, message: {}", request.getSessionId(), request.getMessage());
 
@@ -79,25 +71,17 @@ public class ChatService {
         );
 
         try {
-
-            // 1. 判断问题是否清晰
+            // 判断问题是否清晰
             updateSessionStatus(session, SessionStatus.CLARIFYING);
-            boolean isClear = clarifyUserQuestion(request, emitter, session);
+            // 检查问题清晰度
+            boolean isClear = checkQuestionClarity(request.getMessage(), session.getSessionId());
             if (!isClear) {
-                log.info("User question is unclear, awaiting clarification for sessionId: {}", session.getSessionId());
-                return;
+                // 问题不清晰，请求用户补充
+                handleUnclearQuestionStream(session, request.getMessage(), emitter);
+            } else {
+                // 问题清晰，事件将在流完成后发布
+                handleClearQuestionStream(session, request.getMessage(), emitter);
             }
-
-            // 2. 启动sub-agent执行具体的研究任务
-            updateSessionStatus(session, SessionStatus.RUNNING);
-            supervisorAgent.startResearch(session.getSessionId(), session.getResearchBrief());
-
-            SupervisorAgentContext supervisor = contextCache.getSupervisor(session.getSessionId());
-            AssertUtil.equal(supervisor.getStatus(), SupervisorAgentState.COMPLETED, "Supervisor Agent未完成研究任务");
-
-            // 3. 生成报告总结
-            updateSessionStatus(session, SessionStatus.REPORTING);
-            generateFinalReport(session, emitter, supervisor);
 
         } catch (BusinessException be) {
             log.error("Business exception in chat process", be);
@@ -105,71 +89,6 @@ public class ChatService {
             sseTransportClient.handleError(emitter, be);
             throw be;
         }
-    }
-
-    private void generateFinalReport(Session session, SseEmitter emitter, SupervisorAgentContext supervisor) {
-        log.info("Generating final report for sessionId: {}", session.getSessionId());
-
-        List<Message> conversationHistories = supervisor.getChatMemory().get(supervisor.getSupervisorId());
-        List<Message> histories = new ArrayList<>(conversationHistories);
-        histories.add(new UserMessage(Prompts.FINAL_REPORT_GENERATE_PROMPT.formatted(
-                session.getResearchBrief(),
-                histories.stream()
-                        .filter(msg -> msg instanceof AssistantMessage)
-                        .map(Message::getText)
-                        .reduce("", (a, b) -> a + "\n- " + b),
-                LocalDateTime.now(),
-                String.join("\n", supervisor.getNotes())
-        )));
-
-        Flux<ChatResponse> responseFlux = chatModel.stream(new Prompt(histories));
-        StringBuilder fullReport = new StringBuilder();
-
-        responseFlux.subscribe(
-            response -> {
-                String content = response.getResult().getOutput().getText();
-                fullReport.append(content);
-                // 发送流式内容
-                sseTransportClient.sendMessage(emitter, ChatResp.builder()
-                                .sessionId(session.getSessionId())
-                                .sessionStatus(session.getStatus())
-                                .message(content)
-                                .build());
-            },
-            error -> {
-                log.error("Error in streaming final report", error);
-                throw new BusinessException(error.toString());
-            },
-            () -> {
-                // 发送完整的聊天响应
-                ClarifyChatResponse reportResponse = ClarifyChatResponse.builder()
-                        .sessionId(session.getSessionId())
-                        .message(fullReport.toString())
-                        .sessionStatus(SessionStatus.REPORTING)
-                        .needsClarification(false)
-                        .build();
-
-                sseTransportClient.sendEndMessage(emitter, reportResponse);
-
-                // 保存最终报告到历史
-                saveChatHistory(session.getSessionId(), "Final Report", fullReport.toString(), true);
-            }
-        );
-
-    }
-
-    private boolean clarifyUserQuestion(ChatRequest request, SseEmitter emitter, Session session) {
-        // 检查问题清晰度
-        boolean isClear = checkQuestionClarity(request.getMessage(), session.getSessionId());
-        if (!isClear) {
-            // 问题不清晰，请求用户补充
-            handleUnclearQuestionStream(session, request.getMessage(), emitter);
-        } else {
-            // 问题清晰
-            handleClearQuestionStream(session, request.getMessage(), emitter);
-        }
-
-        return isClear;
     }
 
     /**
@@ -182,11 +101,11 @@ public class ChatService {
             throw new BusinessException("SessionId不能为空");
         }
         String sessionId = request.getSessionId();
-        Session session = activeSessions.get(sessionId);
+        Session session = sessionCache.getActiveSession(sessionId);
         if (session == null) {
             Optional<Session> sessionOpt = sessionRepository.findById(sessionId);
             session = sessionOpt.orElseThrow(() -> new BusinessException("Session不存在"));
-            activeSessions.put(sessionId, session);
+            sessionCache.putActiveSession(sessionId, session);
         }
         return session;
     }
@@ -195,11 +114,11 @@ public class ChatService {
      * 获取澄清轮数
      */
     private Integer getChatRoundNumber(String sessionId) {
-        Integer i = sessionChatRounds.get(sessionId);
+        Integer i = sessionCache.getChatRounds(sessionId);
         if (i == null) {
             ChatHistory latestHistory = chatHistoryRepository.findTopBySessionIdOrderByRoundNumberDesc(sessionId);
             i =  latestHistory != null ? latestHistory.getRoundNumber() : 0;
-            sessionChatRounds.put(sessionId, i);
+            sessionCache.putChatRounds(sessionId, i);
         }
         return i;
     }
@@ -257,7 +176,7 @@ public class ChatService {
 
         // 使用流式调用
         Flux<ChatResponse> responseFlux = chatModel.stream(new Prompt(histories));
-        handleStreamingResponse(responseFlux, session, message, emitter);
+        asyncHandleStreamingResponse(responseFlux, session, message, emitter, false);
     }
 
     /**
@@ -280,22 +199,23 @@ public class ChatService {
         histories.add(new AssistantMessage(researchBrief));
 
         // 生成总结回复
-        histories.add(new UserMessage(Prompts.SUMMARY_PROMPT.formatted(message)));
-        Flux<ChatResponse> stream = chatModel.stream(new Prompt(histories));
-
-        handleStreamingResponse(stream, session, message, emitter);
-
-        // 保存研究简报到session
+        // 保存研究简报到session，先提交数据以避免后台异步线程依赖未提交的事务/实体状态
         session.setResearchBrief(researchBrief);
-        sessionRepository.save(session);
+        sessionRepository.saveAndFlush(session);
         log.info("Saved research brief for sessionId: {}", session.getSessionId());
-    }
 
+        histories.add(new UserMessage(Prompts.SUMMARY_PROMPT.formatted(message)));
+
+        Flux<ChatResponse> stream = chatModel.stream(new Prompt(histories));
+        asyncHandleStreamingResponse(stream, session, message, emitter, true);
+    }
+    
     /**
      * 处理流式响应
+     * @param shouldPublishEvent 是否在完成后发布研究事件
      */
     private void asyncHandleStreamingResponse(Flux<ChatResponse> responseFlux,
-                                       Session session, String message, SseEmitter emitter) {
+                                       Session session, String message, SseEmitter emitter, boolean shouldPublishEvent) {
         StringBuilder fullResponse = new StringBuilder();
         responseFlux.subscribe(
             response -> {
@@ -325,41 +245,14 @@ public class ChatService {
 
                 // 保存澄清流程
                 saveChatHistory(session.getSessionId(), message, fullResponse.toString(), true);
+                
+                // 如果需要，在流完成后发布研究事件
+                if (shouldPublishEvent) {
+                    log.info("Publishing StartResearchEvent for sessionId: {}", session.getSessionId());
+                    applicationEventPublisher.publishEvent(new StartResearchEvent(this, session.getSessionId()));
+                }
             }
         );
-    }
-
-    private void handleStreamingResponse(Flux<ChatResponse> responseFlux,
-                                         Session session, String message, SseEmitter emitter) {
-        StringBuilder fullResponse = new StringBuilder();
-        try (var stream = responseFlux.toStream()) {
-            stream.forEach(response -> {
-                String content = response.getResult().getOutput().getText();
-                fullResponse.append(content);
-                // 发送流式内容
-                sseTransportClient.sendMessage(emitter, ChatResp.builder()
-                        .sessionId(session.getSessionId())
-                        .sessionStatus(session.getStatus())
-                        .message(content)
-                        .build());
-            });
-        } catch (RuntimeException e) {
-            log.error("Error in streaming clarification", e);
-            throw new BusinessException(e.toString());
-        }
-
-        // 发送完整的聊天响应
-        ClarifyChatResponse response = ClarifyChatResponse.builder()
-                .sessionId(session.getSessionId())
-                .message(fullResponse.toString())
-                .sessionStatus(SessionStatus.CLARIFYING)
-                .needsClarification(false)
-                .build();
-
-        sseTransportClient.sendEndMessage(emitter, response);
-
-        // 保存澄清流程
-        saveChatHistory(session.getSessionId(), message, fullResponse.toString(), true);
     }
 
     private void updateSessionStatus(Session session, SessionStatus status) {
