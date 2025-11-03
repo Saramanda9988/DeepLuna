@@ -5,6 +5,12 @@ server:
 spring:
   application:
     name: ${spring.application.name}
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 100MB
+      file-size-threshold: 2KB
   datasource:
     url: jdbc:postgresql://${application.pgsql.ip}:${application.pgsql.port}/${application.pgsql.db}?currentSchema=${application.pgsql.schema}&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
     username: ${application.pgsql.username}

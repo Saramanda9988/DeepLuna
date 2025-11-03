@@ -81,3 +81,42 @@ CREATE TABLE "user"
 COMMENT ON COLUMN "user".user_id IS '用户id';
 COMMENT ON COLUMN "user".user_name IS '用户名称';
 COMMENT ON COLUMN "user".password IS '用户密码';
+
+-- 创建文档元数据表
+CREATE TABLE IF NOT EXISTS document_metadata (
+     id BIGSERIAL PRIMARY KEY,
+     document_id VARCHAR(255) NOT NULL UNIQUE,
+     file_name VARCHAR(500) NOT NULL,
+     file_type VARCHAR(100),
+     file_size BIGINT,
+     user_id BIGINT NOT NULL,
+     category VARCHAR(200),
+     description TEXT,
+     vector_count INTEGER,
+     status VARCHAR(50),
+     upload_time TIMESTAMP NOT NULL,
+     is_deleted BOOLEAN DEFAULT FALSE,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 创建索引
+CREATE INDEX idx_document_user_id ON document_metadata(user_id);
+CREATE INDEX idx_document_category ON document_metadata(category);
+CREATE INDEX idx_document_status ON document_metadata(status);
+CREATE INDEX idx_document_upload_time ON document_metadata(upload_time DESC);
+CREATE INDEX idx_document_is_deleted ON document_metadata(is_deleted);
+
+-- 添加注释
+COMMENT ON TABLE document_metadata IS '文档元数据表，记录上传文档的基本信息';
+COMMENT ON COLUMN document_metadata.document_id IS '文档唯一标识UUID';
+COMMENT ON COLUMN document_metadata.file_name IS '原始文件名';
+COMMENT ON COLUMN document_metadata.file_type IS '文件MIME类型';
+COMMENT ON COLUMN document_metadata.file_size IS '文件大小（字节）';
+COMMENT ON COLUMN document_metadata.user_id IS '上传用户ID';
+COMMENT ON COLUMN document_metadata.category IS '文档分类/标签';
+COMMENT ON COLUMN document_metadata.description IS '文档描述';
+COMMENT ON COLUMN document_metadata.vector_count IS '生成的向量数量';
+COMMENT ON COLUMN document_metadata.status IS '处理状态：success, failed, processing';
+COMMENT ON COLUMN document_metadata.upload_time IS '上传时间';
+COMMENT ON COLUMN document_metadata.is_deleted IS '是否已删除（软删除）';
