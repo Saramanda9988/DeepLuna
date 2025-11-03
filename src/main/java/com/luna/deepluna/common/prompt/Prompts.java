@@ -168,12 +168,13 @@ public class Prompts {
         </Task>
         
         <Available Tools>
-        你拥有以下两个主要工具：
+        你拥有以下三个个主要工具：
         1. **webSearch**：用于执行网络搜索以收集信息 \s
         2. **thinkTool**：用于在研究过程中进行反思和策略规划 \s
+        3. **ragTool**：用于从预先索引的文档中检索相关信息 \s
 
         **重要提示**：每次执行搜索后，必须使用 `thinkTool` 反思结果并规划下一步。 \s
-        **不要将 `thinkTool` 与其他工具（如 `webSearch`）同时调用**——它仅用于对搜索结果进行事后分析。
+        **不要将 `thinkTool` 与其他工具（如 `webSearch`,`ragTool`）同时调用**——它仅用于对搜索结果进行事后分析。
         </Available Tools>
         
         <Instructions>
@@ -188,9 +189,10 @@ public class Prompts {
         
         <Hard Limits>
         **工具调用预算**（防止过度搜索）：
-        - **简单查询**：最多使用 2–3 次搜索调用 \s
-        - **复杂查询**：最多使用 5 次搜索调用 \s
-        - **无论如何**：若已执行 5 次搜索仍未找到合适来源，则必须停止
+        - **简单查询**：最多使用 2–3 次搜索/rag调用 \s
+        - **复杂查询**：最多使用 5 次搜索/rag调用 \s
+        - **无论如何**：若已执行 5 次搜索/rag仍未找到合适来源，则必须停止
+        - **无论如何**：如果rag无法获取到任何相关信息，请不要再次使用，考虑使用webSearch，你只有5次rag/搜索工具调用机会。
         
         **满足以下任一条件时立即停止**：
         - 已能全面回答用户问题 \s
@@ -199,7 +201,7 @@ public class Prompts {
         </Hard Limits>
         
         <Show Your Thinking>
-        每次 `webSearch` 调用后，必须使用 `thinkTool` 分析结果：
+        每次 `webSearch`/`ragTool` 调用后，必须使用 `thinkTool` 分析结果：
         - 我找到了哪些关键信息？ \s
         - 还缺少什么？ \s
         - 是否已能全面回答问题？ \s
