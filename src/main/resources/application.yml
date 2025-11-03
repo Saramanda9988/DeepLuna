@@ -6,19 +6,30 @@ spring:
   application:
     name: ${spring.application.name}
   datasource:
-    url: jdbc:mysql://${application.mysql.ip}:${application.mysql.port}/${application.mysql.db}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-    username: ${application.mysql.username}
-    password: ${application.mysql.password}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:postgresql://${application.pgsql.ip}:${application.pgsql.port}/${application.pgsql.db}?currentSchema=${application.pgsql.schema}&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: ${application.pgsql.username}
+    password: ${application.pgsql.password}
+    driver-class-name: org.postgresql.Driver
   ai:
     deepseek:
       api-key: ${DEEPSEEK_API_KEY}
+    zhipuai:
+      api-key: ${ZHIPUAI_API_KEY} # for Zhipu embedding models
+    vectorstore:
+      pgvector:
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1536
+        max-document-batch-size: 10000 # Optional: Maximum number of documents per batch
   jpa:
     hibernate:
       ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-    database-platform: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          lob:
+            non_contextual_creation: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
