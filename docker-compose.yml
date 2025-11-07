@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库服务 (带 pgvector 扩展)
+  postgres:
+    image: ankane/pgvector:v0.5.1
+    container_name: deepluna-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+      TZ: Asia/Shanghai
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/main/resources/db/migration/V1__.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - deepluna-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c shared_preload_libraries=vector
+      -c max_connections=200
+      -c shared_buffers=256MB
+
+  # Spring Boot 应用服务
+  deepluna-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deepluna-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # 数据库配置
+      APPLICATION_PGSQL_IP: postgres
+      APPLICATION_PGSQL_PORT: 5432
+      APPLICATION_PGSQL_DB: postgres
+      APPLICATION_PGSQL_USERNAME: postgres
+      APPLICATION_PGSQL_PASSWORD: postgres
+      APPLICATION_PGSQL_SCHEMA: deepresearch,public
+      
+      # Spring Boot 配置
+      SPRING_APPLICATION_NAME: LunaDeepResearch
+      SPRING_PROFILES_ACTIVE: prod
+      
+      # AI API Keys (请替换为您的实际 API Key)
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-sk-e2033644f3b948e1b0083ff72ac13b2c}
+      ZHIPUAI_API_KEY: ${ZHIPUAI_API_KEY:-fcf7c855a7e143539f2035b6511bc728.KJaVwVaTVB4cMa0B}
+      
+      # Web 搜索 API Key
+      WEBSEARCH_TAVILY_API_KEY: ${WEBSEARCH_TAVILY_API_KEY:-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}
+      
+      # JVM 参数
+      JAVA_OPTS: "-Xms512m -Xmx2048m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+      
+      # 时区设置
+      TZ: Asia/Shanghai
+    ports:
+      - "8090:8090"
+    volumes:
+      - app_logs:/app/logs
+      - app_uploads:/app/uploads
+    networks:
+      - deepluna-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8090/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # pgAdmin (可选 - 数据库管理工具)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: deepluna-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@deepluna.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      TZ: Asia/Shanghai
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - deepluna-network
+    profiles:
+      - tools
+
+networks:
+  deepluna-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  app_logs:
+    driver: local
+  app_uploads:
+    driver: local

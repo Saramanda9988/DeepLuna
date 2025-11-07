@@ -34,4 +34,14 @@ build/
 .kiro/
 .idea/
 
+### Docker ###
+.env
+docker-compose.override.yml
+*.log
+
+### Application Config ###
 application.properties
+
+### Backups ###
+backups/
+*.sql.backup
