@@ -1,6 +1,7 @@
 package com.luna.deepluna.agent;
 
 import com.luna.deepluna.agent.context.SupervisorAgentContext;
+import com.luna.deepluna.cache.ChatClientCache;
 import com.luna.deepluna.cache.SessionCache;
 import com.luna.deepluna.common.enums.SessionStatus;
 import com.luna.deepluna.common.exception.BusinessException;
@@ -18,6 +19,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -32,7 +34,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ReportGenerator {
 
-    private final DeepSeekChatModel chatModel;
+    private final ChatClientCache chatClientCache;
     private final ChatHistoryRepository chatHistoryRepository;
     private final SessionCache sessionCache;
 
@@ -60,6 +62,9 @@ public class ReportGenerator {
                 LocalDateTime.now(),
                 String.join("\n", supervisor.getNotes())
         )));
+
+        OpenAiChatModel chatModel = chatClientCache.getChatClient(sessionId);
+        AssertUtil.isNotNull(chatModel, "Chat模型未初始化，无法生成最终报告");
 
         ChatResponse response = chatModel.call(new Prompt(histories));
         Generation result = response.getResult();

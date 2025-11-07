@@ -1,6 +1,7 @@
 package com.luna.deepluna.service;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.luna.deepluna.cache.ChatClientCache;
 import com.luna.deepluna.cache.SessionCache;
 import com.luna.deepluna.common.client.SseTransportClient;
 import com.luna.deepluna.common.enums.SessionStatus;
@@ -12,11 +13,14 @@ import com.luna.deepluna.domain.entity.Session;
 import com.luna.deepluna.domain.request.ChatRequest;
 import com.luna.deepluna.domain.response.ChatResp;
 import com.luna.deepluna.domain.response.ClarifyChatResponse;
+import com.luna.deepluna.domain.response.ModelResponse;
 import com.luna.deepluna.event.StartResearchEvent;
 import com.luna.deepluna.repository.ChatHistoryRepository;
 import com.luna.deepluna.repository.SessionRepository;
+import com.luna.deepluna.service.factory.CustomModelFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -26,6 +30,7 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -47,11 +52,17 @@ public class ChatService {
     private final BeanOutputConverter<ClarifyResult> checkConverter = new BeanOutputConverter<>(ClarifyResult.class);
 
     private final ChatMemory chatMemory;
-    private final DeepSeekChatModel chatModel;
+
+    private final ModelService modelService;
+    private final CustomModelFactory customModelFactory;
+
     private final SessionRepository sessionRepository;
     private final ChatHistoryRepository chatHistoryRepository;
     private final SseTransportClient sseTransportClient;
+
     private final SessionCache sessionCache;
+    private final ChatClientCache chatClientCache;
+
     private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
@@ -69,6 +80,10 @@ public class ChatService {
                         Objects.equals(session.getStatus(), SessionStatus.FAILED),
                 "当前Session状态不允许新的请求"
         );
+        ModelResponse model = modelService.getModelById(request.getModelId());
+        AssertUtil.isNotNull(model, "模型不存在");
+        OpenAiChatModel chatModel = customModelFactory.createChatModelClient(ModelResponse.toEntity(model));
+        chatClientCache.putChatClient(session.getSessionId(), chatModel);
 
         try {
             // 判断问题是否清晰
@@ -133,6 +148,7 @@ public class ChatService {
         histories = new ArrayList<>(histories);
         histories.add(new UserMessage(Prompts.JUDGE_PROMPT.formatted(LocalDateTime.now(), message)));
 
+        OpenAiChatModel chatModel = chatClientCache.getChatClient(sessionId);
         Generation response = chatModel.call(new Prompt(histories)).getResult();
         String text = response.getOutput().getText();
         AssertUtil.isNotNull(text, "AI未返回澄清结果");
@@ -175,6 +191,7 @@ public class ChatService {
         histories.add(new UserMessage(Prompts.CLARIFY_PROMPT.formatted(message)));
 
         // 使用流式调用
+        OpenAiChatModel chatModel = chatClientCache.getChatClient(session.getSessionId());
         Flux<ChatResponse> responseFlux = chatModel.stream(new Prompt(histories));
         asyncHandleStreamingResponse(responseFlux, session, message, emitter, false);
     }
@@ -193,6 +210,7 @@ public class ChatService {
         histories = new ArrayList<>(histories);
         histories.add(new UserMessage(Prompts.BRIEF_PROMPT.formatted(LocalDateTime.now())));
 
+        OpenAiChatModel chatModel = chatClientCache.getChatClient(session.getSessionId());
         Generation response = chatModel.call(new Prompt(histories)).getResult();
         String researchBrief = response.getOutput().getText();
         AssertUtil.isNotNull(researchBrief, "AI未返回澄清结果");

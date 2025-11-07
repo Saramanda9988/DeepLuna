@@ -1,10 +1,12 @@
 package com.luna.deepluna.agent;
 
+import com.luna.deepluna.cache.ChatClientCache;
 import com.luna.deepluna.cache.ContextCache;
 import com.luna.deepluna.agent.agentTool.SupervisorTools;
 import com.luna.deepluna.common.enums.SupervisorAgentState;
 import com.luna.deepluna.common.prompt.Prompts;
 import com.luna.deepluna.agent.context.SupervisorAgentContext;
+import com.luna.deepluna.common.utils.AssertUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -21,6 +23,7 @@ import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.stereotype.Service;
 
@@ -36,7 +39,7 @@ public class SupervisorAgent {
 
     private final SupervisorTools supervisorTools;
 
-    private final DeepSeekChatModel chatModel;
+    private final ChatClientCache chatClientCache;
 
     private final ToolCallingManager toolCallingManager;
 
@@ -59,7 +62,12 @@ public class SupervisorAgent {
     }
 
     private void supervisorAgent(String sessionId) {
+        OpenAiChatModel chatModel = chatClientCache.getChatClient(sessionId);
+        AssertUtil.isNotNull(chatModel, "Chat model not found for sessionId: " + sessionId);
+
         SupervisorAgentContext supervisorAgentContext = contextCache.getSupervisor(sessionId);
+        AssertUtil.isNotNull(supervisorAgentContext, "SupervisorAgentContext not found for sessionId: " + sessionId);
+
         String supervisorId = supervisorAgentContext.getSupervisorId();
         ChatMemory chatMemory = supervisorAgentContext.getChatMemory();
 

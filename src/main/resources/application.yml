@@ -17,6 +17,8 @@ spring:
     password: ${application.pgsql.password}
     driver-class-name: org.postgresql.Driver
   ai:
+    openai:
+      api-key: your-openai-api-key
     deepseek:
       api-key: ${DEEPSEEK_API_KEY}
     zhipuai:

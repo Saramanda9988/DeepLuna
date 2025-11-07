@@ -2,6 +2,7 @@ package com.luna.deepluna.agent;
 
 import com.luna.deepluna.agent.agentTool.SubAgentTools;
 import com.luna.deepluna.agent.context.SubAgentContext;
+import com.luna.deepluna.cache.ChatClientCache;
 import com.luna.deepluna.cache.ContextCache;
 import com.luna.deepluna.common.enums.SubAgentTaskStatus;
 import com.luna.deepluna.common.prompt.Prompts;
@@ -21,6 +22,7 @@ import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.stereotype.Service;
 
@@ -38,7 +40,7 @@ public class SubAgent {
 
     private final SubAgentTools subAgentTools;
 
-    private final DeepSeekChatModel chatModel;
+    private final ChatClientCache chatClientCache;
 
     private final ToolCallingManager toolCallingManager;
 
@@ -60,7 +62,13 @@ public class SubAgent {
 
     private String subAgent(String subAgentId) {
         SubAgentContext subAgent = contextCache.getSubAgent(subAgentId);
+        AssertUtil.isNotNull(subAgent, "Sub Agent not found: subAgentId=" + subAgentId);
+
+        OpenAiChatModel chatModel = chatClientCache.getChatClient(subAgentId);
+        AssertUtil.isNotNull(chatModel, "Chat model not found for Sub Agent: subAgentId=" + subAgentId);
+
         ChatMemory chatMemory = subAgent.getChatMemory();
+
         chatMemory.add(subAgentId, new AssistantMessage(Prompts.SUB_AGENT_PROMPT.formatted(LocalDateTime.now())));
         chatMemory.add(subAgentId, new UserMessage("Research Topic" + subAgent.getResearchTopic()));
         subAgent.setStatus(SubAgentTaskStatus.IN_PROGRESS);
