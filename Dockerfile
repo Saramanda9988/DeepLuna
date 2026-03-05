@@ -1,19 +1,19 @@
 # 多阶段构建 Dockerfile
 # 阶段 1: 构建阶段
-FROM maven:3.9.5-eclipse-temurin-21-alpine AS builder
+FROM gradle:8.10.2-jdk21-alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
 
-# 复制 pom.xml 并下载依赖（利用 Docker 缓存）
-COPY pom.xml .
-RUN mvn dependency:go-offline -B
+# 复制 Gradle 构建文件并预热依赖（利用 Docker 缓存）
+COPY build.gradle settings.gradle gradle.properties ./
+RUN gradle dependencies --no-daemon
 
 # 复制源代码
 COPY src ./src
 
 # 构建应用（跳过测试以加快构建速度）
-RUN mvn clean package -DskipTests -B
+RUN gradle clean bootJar -x test --no-daemon
 
 # 阶段 2: 运行阶段
 FROM eclipse-temurin:21-jre-alpine
@@ -26,7 +26,7 @@ RUN addgroup -g 1001 appuser && \
     adduser -D -u 1001 -G appuser appuser
 
 # 从构建阶段复制 jar 文件
-COPY --from=builder /app/target/*.jar app.jar
+COPY --from=builder /app/build/libs/*.jar app.jar
 
 # 创建日志目录
 RUN mkdir -p /app/logs && chown -R appuser:appuser /app

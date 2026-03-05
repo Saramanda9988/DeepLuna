@@ -59,6 +59,9 @@ public class WebsearchTest {
     @Value("${websearch.tavily.api.key}")
     public String tavilyApiKey;
 
+    @Value("${deepseek.api-key}")
+    private String deepseekApiKey;
+
     @Autowired
     HttpClient httpClient;
 
@@ -84,10 +87,11 @@ public class WebsearchTest {
     CustomModelFactory customModelFactory;
 
     private void initChatModel(String sessionId) {
+        AssertUtil.isNotEmpty(deepseekApiKey, "deepseek.api-key 未配置，无法运行 WebsearchTest");
         Model model = Model.builder()
                 .modelId("model-test-001")
                 .name("deepseek-chat")
-                .token("sk-e2033644f3b948e1b0083ff72ac13b2c")
+                .token(deepseekApiKey)
                 .url("https://api.deepseek.com")
                 .build();
         chatClientCache.putChatClient(sessionId, customModelFactory.createChatModelClient(model));

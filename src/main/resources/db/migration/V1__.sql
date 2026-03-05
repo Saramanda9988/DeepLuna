@@ -76,7 +76,8 @@ CREATE TABLE "user"
     user_id   BIGINT       NOT NULL,
     user_name VARCHAR(255) NOT NULL,
     password  VARCHAR(255) NOT NULL,
-    PRIMARY KEY (user_id)
+    PRIMARY KEY (user_id),
+    CONSTRAINT uk_user_name UNIQUE (user_name)
 );
 COMMENT ON COLUMN "user".user_id IS '用户id';
 COMMENT ON COLUMN "user".user_name IS '用户名称';

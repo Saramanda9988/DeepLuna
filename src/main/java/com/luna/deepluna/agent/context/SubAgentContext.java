@@ -30,6 +30,19 @@ public class SubAgentContext {
     // 聊天记忆
     private ChatMemory chatMemory;
 
-    // 最大反思次数
+    // 最大工具调用次数
     private Integer maxWebSearch;
+
+    /**
+     * Supervisor 发送的取消信号。
+     * 使用 volatile 保证跨线程可见性：Supervisor 线程写，SubAgent 线程读。
+     */
+    @Builder.Default
+    private volatile boolean cancelled = false;
+
+    /**
+     * SubAgent 被提前取消时，保存已收集到的中间研究结果，
+     * 避免已完成的搜索工作完全丢失。
+     */
+    private String earlyStopResult;
 }

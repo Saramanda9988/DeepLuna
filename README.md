@@ -10,8 +10,21 @@
 - 数据：PostgreSQL（带 pgvector）、Spring Data JPA、Hibernate
 - API 文档：Springdoc OpenAPI + Knife4j
 - 工具库：Lombok、Hutool、Guava、Netty、Apache POI、Apache Tika
-- 构建：Maven 3.9+
+- 构建：Gradle 8+
 - 容器：Docker、Docker Compose
+
+## 本地构建与运行
+
+```bash
+# 构建（跳过测试）
+gradle clean bootJar -x test
+
+# 运行
+gradle bootRun
+
+# 测试
+gradle test
+```
 
 ### 使用 Docker 部署
 
@@ -34,7 +47,10 @@ docker-compose up -d
 注意：
 - 数据库初始化脚本位于 `src/main/resources/db/migration/V1__.sql`（包含 chat/session/task/user/document_metadata 等表）
 - 使用 `ankane/pgvector` 镜像以启用向量扩展
-- 本地启动如需配置数据库或密钥，请在 `application.properties` / `application.yml` 中修改或使用环境变量覆盖。
+- 配置采用两层：
+  - `application.yml`：统一结构（字段保持一致）
+  - `application-{profile}.properties`：按环境注入值（如 `local` / `prod`）
+- 默认 profile 为 `local`，可用环境变量 `SPRING_PROFILES_ACTIVE` 切换。
 
 ## Roadmap
 

@@ -51,14 +51,19 @@ services:
       
       # Spring Boot 配置
       SPRING_APPLICATION_NAME: LunaDeepResearch
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       
       # AI API Keys (请替换为您的实际 API Key)
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-sk-e2033644f3b948e1b0083ff72ac13b2c}
-      ZHIPUAI_API_KEY: ${ZHIPUAI_API_KEY:-fcf7c855a7e143539f2035b6511bc728.KJaVwVaTVB4cMa0B}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      ZHIPUAI_API_KEY: ${ZHIPUAI_API_KEY}
       
       # Web 搜索 API Key
-      WEBSEARCH_TAVILY_API_KEY: ${WEBSEARCH_TAVILY_API_KEY:-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}
+      WEBSEARCH_TAVILY_API_KEY: ${WEBSEARCH_TAVILY_API_KEY}
+
+      # Auth 配置
+      AUTH_MODE: ${AUTH_MODE:-off}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-local-dev-jwt-secret-change-me-please}
+      AUTH_JWT_EXPIRATION_SECONDS: ${AUTH_JWT_EXPIRATION_SECONDS:-86400}
       
       # JVM 参数
       JAVA_OPTS: "-Xms512m -Xmx2048m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"

@@ -1,10 +1,11 @@
 server:
   tomcat:
     max-connections: 10000
-  port: 8090
+  port: ${server.port:8090}
+
 spring:
   application:
-    name: ${spring.application.name}
+    name: ${application.name}
   servlet:
     multipart:
       enabled: true
@@ -18,17 +19,17 @@ spring:
     driver-class-name: org.postgresql.Driver
   ai:
     openai:
-      api-key: your-openai-api-key
+      api-key: ${openai.api-key:}
     deepseek:
-      api-key: ${DEEPSEEK_API_KEY}
+      api-key: ${deepseek.api-key}
     zhipuai:
-      api-key: ${ZHIPUAI_API_KEY} # for Zhipu embedding models
+      api-key: ${zhipuai.api-key}
     vectorstore:
       pgvector:
         index-type: HNSW
         distance-type: COSINE_DISTANCE
-        dimensions: 1536
-        max-document-batch-size: 10000 # Optional: Maximum number of documents per batch
+        dimensions: 1024
+        max-document-batch-size: 10000
   jpa:
     hibernate:
       ddl-auto: validate
@@ -41,3 +42,18 @@ spring:
           lob:
             non_contextual_creation: true
     database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+application:
+  pgsql:
+    schema: ${application.pgsql.schema}
+
+websearch:
+  tavily:
+    api:
+      key: ${websearch.tavily.api-key}
+
+auth:
+  mode: ${auth.mode}
+  jwt:
+    secret: ${auth.jwt.secret}
+    expiration-seconds: ${auth.jwt.expiration-seconds:86400}
