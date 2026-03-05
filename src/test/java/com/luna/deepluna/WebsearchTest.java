@@ -94,7 +94,7 @@ public class WebsearchTest {
                 .token(deepseekApiKey)
                 .url("https://api.deepseek.com")
                 .build();
-        chatClientCache.putChatClient(sessionId, customModelFactory.createChatModelClient(model));
+        chatClientCache.putBySessionId(sessionId, customModelFactory.createChatModelClient(model));
     }
 
     @Test
@@ -142,7 +142,7 @@ public class WebsearchTest {
                 .build();
 
         initChatModel(supervisorAgentContext.getSessionId());
-        OpenAiChatModel chatModel = chatClientCache.getChatClient(supervisorAgentContext.getSessionId());
+        OpenAiChatModel chatModel = chatClientCache.getBySessionId(supervisorAgentContext.getSessionId());
 
         String supervisorId = supervisorAgentContext.getSupervisorId();
         ChatMemory chatMemory = supervisorAgentContext.getChatMemory();
@@ -216,6 +216,7 @@ public class WebsearchTest {
     @Test
     public void startSubAgentResearch() {
         SubAgentContext subAgent = SubAgentContext.builder()
+                .sessionId("test-session-001")
                 .chatMemory(MessageWindowChatMemory.builder()
                         .chatMemoryRepository(new InMemoryChatMemoryRepository())
                         .build())
@@ -225,8 +226,8 @@ public class WebsearchTest {
                 .subAgentId("sub-agent-001")
                 .build();
 
-        initChatModel(subAgent.getSubAgentId());
-        OpenAiChatModel chatModel = chatClientCache.getChatClient(subAgent.getSubAgentId());
+        initChatModel(subAgent.getSessionId());
+        OpenAiChatModel chatModel = chatClientCache.getBySessionId(subAgent.getSessionId());
 
         String subAgentId = subAgent.getSubAgentId();
         ChatMemory chatMemory = subAgent.getChatMemory();

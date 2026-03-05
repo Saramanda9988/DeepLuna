@@ -63,7 +63,7 @@ public class ReportGenerator {
                 String.join("\n", supervisor.getNotes())
         )));
 
-        OpenAiChatModel chatModel = chatClientCache.getChatClient(sessionId);
+        OpenAiChatModel chatModel = chatClientCache.getBySessionId(sessionId);
         AssertUtil.isNotNull(chatModel, "Chat模型未初始化，无法生成最终报告");
 
         ChatResponse response = chatModel.call(new Prompt(histories));

@@ -13,11 +13,13 @@ import com.luna.deepluna.event.StartResearchEvent;
 import com.luna.deepluna.repository.SessionRepository;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 @Slf4j
 @Component
@@ -29,6 +31,8 @@ public class ResearchEventListener {
     private final ContextCache contextCache;
     private final SessionCache sessionCache;
     private final ReportGenerator reportGenerator;
+    @Qualifier("persistenceExecutor")
+    private final Executor persistenceExecutor;
 
     @TransactionalEventListener(
             phase = TransactionPhase.AFTER_COMPLETION,
@@ -60,10 +64,14 @@ public class ResearchEventListener {
         AssertUtil.isNotNull(session, "Session不能为空");
         session.setStatus(status);
 
-        // TODO: 使用@Async注解控制的受控线程池异步保存
         CompletableFuture.runAsync(() -> {
-            sessionRepository.save(session);
-            log.info("Session {} status updated to {}", session.getSessionId(), status);
-        });
+                    sessionRepository.save(session);
+                    log.info("Session {} status updated to {}", session.getSessionId(), status);
+                }, persistenceExecutor)
+                .exceptionally(ex -> {
+                    log.error("Failed to persist session status: sessionId={}, status={}",
+                            session.getSessionId(), status, ex);
+                    return null;
+                });
     }
 }

@@ -18,7 +18,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
@@ -46,8 +45,10 @@ public class SubAgent {
 
     private final ContextCache contextCache;
 
-    public String startSubAgentResearch(String researchTopic) {
+    public String startSubAgentResearch(String sessionId, String researchTopic) {
+        AssertUtil.isNotEmpty(sessionId, "SessionId不能为空");
         SubAgentContext context = SubAgentContext.builder()
+                .sessionId(sessionId)
                 .chatMemory(MessageWindowChatMemory.builder()
                         .chatMemoryRepository(new InMemoryChatMemoryRepository())
                         .build())
@@ -63,9 +64,10 @@ public class SubAgent {
     private String subAgent(String subAgentId) {
         SubAgentContext subAgent = contextCache.getSubAgent(subAgentId);
         AssertUtil.isNotNull(subAgent, "Sub Agent not found: subAgentId=" + subAgentId);
+        AssertUtil.isNotEmpty(subAgent.getSessionId(), "Sub Agent缺少关联sessionId: subAgentId=" + subAgentId);
 
-        OpenAiChatModel chatModel = chatClientCache.getChatClient(subAgentId);
-        AssertUtil.isNotNull(chatModel, "Chat model not found for Sub Agent: subAgentId=" + subAgentId);
+        OpenAiChatModel chatModel = chatClientCache.getBySessionId(subAgent.getSessionId());
+        AssertUtil.isNotNull(chatModel, "Chat model not found for Sub Agent: sessionId=" + subAgent.getSessionId());
 
         ChatMemory chatMemory = subAgent.getChatMemory();
 

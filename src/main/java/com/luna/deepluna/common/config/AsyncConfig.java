@@ -3,9 +3,10 @@ package com.luna.deepluna.common.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * Configuration for asynchronous task execution.
@@ -14,30 +15,39 @@ import java.util.concurrent.Executors;
 @Configuration
 @EnableAsync
 public class AsyncConfig {
-    
-    /**
-     * Main executor for agent tasks.
-     * Used by the Supervisor for orchestrating agent execution.
-     */
+
     @Bean("agentExecutor")
-    public ExecutorService agentExecutor() {
-        return Executors.newFixedThreadPool(8, r -> {
-            Thread t = new Thread(r, "agent-pool-" + System.currentTimeMillis());
-            t.setDaemon(true);
-            return t;
-        });
+    public Executor agentExecutor() {
+        return buildExecutor("agent-exec-", 4, 8, 200);
     }
-    
-    /**
-     * Specialized executor for retrieval operations.
-     * Used for parallel information gathering from multiple sources.
-     */
+
     @Bean("retrievalExecutor")
-    public ExecutorService retrievalExecutor() {
-        return Executors.newFixedThreadPool(4, r -> {
-            Thread t = new Thread(r, "retrieval-pool-" + System.currentTimeMillis());
-            t.setDaemon(true);
-            return t;
-        });
+    public Executor retrievalExecutor() {
+        return buildExecutor("retrieval-exec-", 2, 4, 100);
+    }
+
+    @Bean("chatHistoryExecutor")
+    public Executor chatHistoryExecutor() {
+        return buildExecutor("chat-history-exec-", 2, 4, 500);
+    }
+
+    @Bean("persistenceExecutor")
+    public Executor persistenceExecutor() {
+        return buildExecutor("persistence-exec-", 2, 4, 500);
+    }
+
+    private Executor buildExecutor(String threadNamePrefix, int corePoolSize, int maxPoolSize, int queueCapacity) {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix(threadNamePrefix);
+        executor.setCorePoolSize(corePoolSize);
+        executor.setMaxPoolSize(maxPoolSize);
+        executor.setQueueCapacity(queueCapacity);
+        executor.setAllowCoreThreadTimeOut(true);
+        executor.setKeepAliveSeconds(60);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
     }
 }

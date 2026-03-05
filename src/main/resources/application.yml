@@ -57,3 +57,13 @@ auth:
   jwt:
     secret: ${auth.jwt.secret}
     expiration-seconds: ${auth.jwt.expiration-seconds:86400}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

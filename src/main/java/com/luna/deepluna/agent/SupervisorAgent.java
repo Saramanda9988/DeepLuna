@@ -19,7 +19,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
@@ -30,6 +29,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -62,7 +62,7 @@ public class SupervisorAgent {
     }
 
     private void supervisorAgent(String sessionId) {
-        OpenAiChatModel chatModel = chatClientCache.getChatClient(sessionId);
+        OpenAiChatModel chatModel = chatClientCache.getBySessionId(sessionId);
         AssertUtil.isNotNull(chatModel, "Chat model not found for sessionId: " + sessionId);
 
         SupervisorAgentContext supervisorAgentContext = contextCache.getSupervisor(sessionId);
@@ -86,6 +86,7 @@ public class SupervisorAgent {
 
         ChatOptions chatOptions = ToolCallingChatOptions.builder()
                 .toolCallbacks(ToolCallbacks.from(supervisorTools))
+                .toolContext(Map.of("sessionId", sessionId))
                 .internalToolExecutionEnabled(false)
                 .build();
 

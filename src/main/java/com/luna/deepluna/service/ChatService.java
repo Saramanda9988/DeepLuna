@@ -9,11 +9,11 @@ import com.luna.deepluna.common.exception.BusinessException;
 import com.luna.deepluna.common.prompt.Prompts;
 import com.luna.deepluna.common.utils.AssertUtil;
 import com.luna.deepluna.domain.entity.ChatHistory;
+import com.luna.deepluna.domain.entity.Model;
 import com.luna.deepluna.domain.entity.Session;
 import com.luna.deepluna.domain.request.ChatRequest;
 import com.luna.deepluna.domain.response.ChatResp;
 import com.luna.deepluna.domain.response.ClarifyChatResponse;
-import com.luna.deepluna.domain.response.ModelResponse;
 import com.luna.deepluna.event.StartResearchEvent;
 import com.luna.deepluna.repository.ChatHistoryRepository;
 import com.luna.deepluna.repository.SessionRepository;
@@ -29,10 +29,9 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
-import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
@@ -40,6 +39,7 @@ import reactor.core.publisher.Flux;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 @Slf4j
 @Service
@@ -65,6 +65,12 @@ public class ChatService {
 
     private final ApplicationEventPublisher applicationEventPublisher;
 
+    @Qualifier("chatHistoryExecutor")
+    private final Executor chatHistoryExecutor;
+
+    @Qualifier("persistenceExecutor")
+    private final Executor persistenceExecutor;
+
     /**
      * 处理流式聊天请求
      */
@@ -80,10 +86,9 @@ public class ChatService {
                         Objects.equals(session.getStatus(), SessionStatus.FAILED),
                 "当前Session状态不允许新的请求"
         );
-        ModelResponse model = modelService.getModelById(request.getModelId());
-        AssertUtil.isNotNull(model, "模型不存在");
-        OpenAiChatModel chatModel = customModelFactory.createChatModelClient(ModelResponse.toEntity(model));
-        chatClientCache.putChatClient(session.getSessionId(), chatModel);
+        Model model = modelService.getModelEntityById(request.getModelId());
+        OpenAiChatModel chatModel = customModelFactory.createChatModelClient(model);
+        chatClientCache.putBySessionId(session.getSessionId(), chatModel);
 
         try {
             // 判断问题是否清晰
@@ -148,7 +153,7 @@ public class ChatService {
         histories = new ArrayList<>(histories);
         histories.add(new UserMessage(Prompts.JUDGE_PROMPT.formatted(LocalDateTime.now(), message)));
 
-        OpenAiChatModel chatModel = chatClientCache.getChatClient(sessionId);
+        OpenAiChatModel chatModel = chatClientCache.getBySessionId(sessionId);
         Generation response = chatModel.call(new Prompt(histories)).getResult();
         String text = response.getOutput().getText();
         AssertUtil.isNotNull(text, "AI未返回澄清结果");
@@ -162,8 +167,7 @@ public class ChatService {
     /**
      * 保存澄清历史
      */
-    @Async
-    protected void saveChatHistory(String sessionId, String question, String answer, boolean completed) {
+    private void saveChatHistorySync(String sessionId, String question, String answer, boolean completed) {
         ChatHistory history = ChatHistory.builder()
                 .id(UUID.randomUUID().toString())
                 .sessionId(sessionId)
@@ -191,7 +195,7 @@ public class ChatService {
         histories.add(new UserMessage(Prompts.CLARIFY_PROMPT.formatted(message)));
 
         // 使用流式调用
-        OpenAiChatModel chatModel = chatClientCache.getChatClient(session.getSessionId());
+        OpenAiChatModel chatModel = chatClientCache.getBySessionId(session.getSessionId());
         Flux<ChatResponse> responseFlux = chatModel.stream(new Prompt(histories));
         asyncHandleStreamingResponse(responseFlux, session, message, emitter, false);
     }
@@ -210,7 +214,7 @@ public class ChatService {
         histories = new ArrayList<>(histories);
         histories.add(new UserMessage(Prompts.BRIEF_PROMPT.formatted(LocalDateTime.now())));
 
-        OpenAiChatModel chatModel = chatClientCache.getChatClient(session.getSessionId());
+        OpenAiChatModel chatModel = chatClientCache.getBySessionId(session.getSessionId());
         Generation response = chatModel.call(new Prompt(histories)).getResult();
         String researchBrief = response.getOutput().getText();
         AssertUtil.isNotNull(researchBrief, "AI未返回澄清结果");
@@ -262,7 +266,13 @@ public class ChatService {
                 sseTransportClient.sendEndMessage(emitter, response);
 
                 // 保存澄清流程
-                saveChatHistory(session.getSessionId(), message, fullResponse.toString(), true);
+                CompletableFuture.runAsync(
+                                () -> saveChatHistorySync(session.getSessionId(), message, fullResponse.toString(), true),
+                                chatHistoryExecutor)
+                        .exceptionally(ex -> {
+                            log.error("Failed to persist chat history for sessionId={}", session.getSessionId(), ex);
+                            return null;
+                        });
                 
                 // 如果需要，在流完成后发布研究事件
                 if (shouldPublishEvent) {
@@ -278,10 +288,14 @@ public class ChatService {
         AssertUtil.isNotNull(session, "Session不能为空");
         session.setStatus(status);
 
-        // TODO: 使用@Async注解控制的受控线程池异步保存
         CompletableFuture.runAsync(() -> {
-            sessionRepository.save(session);
-            log.info("Session {} status updated to {}", session.getSessionId(), status);
-        });
+                    sessionRepository.save(session);
+                    log.info("Session {} status updated to {}", session.getSessionId(), status);
+                }, persistenceExecutor)
+                .exceptionally(ex -> {
+                    log.error("Failed to persist session status: sessionId={}, status={}",
+                            session.getSessionId(), status, ex);
+                    return null;
+                });
     }
 }

@@ -21,6 +21,20 @@ import java.util.stream.Collectors;
 public class ModelService {
     
     private final ModelRepository modelRepository;
+
+    private Model requireModel(String modelId) {
+        Optional<Model> optionalModel = modelRepository.findById(modelId);
+        return optionalModel.orElseThrow(() -> new BusinessException("模型不存在"));
+    }
+
+    private ModelResponse toResponse(Model model) {
+        return new ModelResponse(
+                model.getModelId(),
+                model.getName(),
+                model.getUrl(),
+                model.getCreateTime()
+        );
+    }
     
     /**
      * 查询所有模型列表（不包含token）
@@ -29,12 +43,7 @@ public class ModelService {
         List<Model> models = modelRepository.findAll();
         
         return models.stream()
-                .map(model -> new ModelResponse(
-                        model.getModelId(),
-                        model.getName(),
-                        model.getUrl(),
-                        model.getCreateTime()
-                ))
+                .map(this::toResponse)
                 .collect(Collectors.toList());
     }
     
@@ -42,16 +51,14 @@ public class ModelService {
      * 根据ID查询模型（不包含token）
      */
     public ModelResponse getModelById(String modelId) {
-        Optional<Model> optionalModel = modelRepository.findById(modelId);
-        
-        Model model = optionalModel.orElseThrow(() -> new BusinessException("模型不存在"));
-        
-        return new ModelResponse(
-                model.getModelId(),
-                model.getName(),
-                model.getUrl(),
-                model.getCreateTime()
-        );
+        return toResponse(requireModel(modelId));
+    }
+
+    /**
+     * 根据ID查询模型（包含token，仅服务内部使用）
+     */
+    public Model getModelEntityById(String modelId) {
+        return requireModel(modelId);
     }
     
     /**
@@ -71,21 +78,15 @@ public class ModelService {
         modelRepository.save(model);
         
         log.info("创建模型成功: modelId={}, name={}", modelId, request.getName());
-        
-        return new ModelResponse(
-                model.getModelId(),
-                model.getName(),
-                model.getUrl(),
-                model.getCreateTime()
-        );
+
+        return toResponse(model);
     }
     
     /**
      * 更新模型信息
      */
     public ModelResponse updateModel(String modelId, ModelRequest request) {
-        Optional<Model> optionalModel = modelRepository.findById(modelId);
-        Model model = optionalModel.orElseThrow(() -> new BusinessException("模型不存在"));
+        Model model = requireModel(modelId);
         
         if (request.getName() != null) {
             model.setName(request.getName());
@@ -102,23 +103,15 @@ public class ModelService {
         modelRepository.save(model);
         
         log.info("更新模型成功: modelId={}, name={}", modelId, model.getName());
-        
-        return new ModelResponse(
-                model.getModelId(),
-                model.getName(),
-                model.getUrl(),
-                model.getCreateTime()
-        );
+
+        return toResponse(model);
     }
     
     /**
      * 删除模型
      */
     public void deleteModel(String modelId) {
-        Optional<Model> optionalModel = modelRepository.findById(modelId);
-        if (optionalModel.isEmpty()) {
-            throw new BusinessException("模型不存在");
-        }
+        requireModel(modelId);
         
         modelRepository.deleteById(modelId);
         

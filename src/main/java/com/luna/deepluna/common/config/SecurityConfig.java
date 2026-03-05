@@ -25,6 +25,8 @@ public class SecurityConfig {
             "/capi/user/register",
             "/capi/user/login",
             "/embedding/health",
+            "/actuator/health",
+            "/actuator/health/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
