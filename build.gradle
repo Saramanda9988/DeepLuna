@@ -1,0 +1,74 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.5'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.luna'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.spring.io/milestone' }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+dependencies {
+    implementation 'org.springframework.ai:spring-ai-deepseek:1.1.0-M4'
+    implementation 'org.springframework.ai:spring-ai-starter-model-deepseek:1.1.0-M4'
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai:1.1.0-M4'
+    implementation 'org.springframework.ai:spring-ai-starter-model-zhipuai:1.1.0-M4'
+    implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector:1.1.0-M4'
+    implementation 'org.springframework.ai:spring-ai-pdf-document-reader:1.1.0-M4'
+    implementation 'org.springframework.ai:spring-ai-tika-document-reader:1.1.0-M4'
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    implementation 'org.springframework.statemachine:spring-statemachine-starter:4.0.1'
+
+    implementation 'org.postgresql:postgresql:42.6.0'
+    implementation 'org.apache.poi:poi-ooxml:5.2.4'
+    implementation 'org.apache.tika:tika-core:2.9.1'
+    implementation 'org.apache.tika:tika-parsers-standard-package:2.9.1'
+    implementation 'cn.hutool:hutool-all:5.8.25'
+    implementation 'io.netty:netty-all:4.1.112.Final'
+    implementation 'com.google.guava:guava:33.3.0-jre'
+    implementation 'org.jetbrains:annotations:24.0.0'
+    implementation 'com.github.xiaoymin:knife4j-openapi3-jakarta-spring-boot-starter:4.4.0'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.5'
+
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5'
+
+    compileOnly 'org.projectlombok:lombok:1.18.40'
+    annotationProcessor 'org.projectlombok:lombok:1.18.40'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'com.h2database:h2'
+    testCompileOnly 'org.projectlombok:lombok:1.18.40'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.40'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
