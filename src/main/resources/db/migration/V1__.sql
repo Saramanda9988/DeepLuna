@@ -37,7 +37,7 @@ CREATE TABLE session
     session_id     VARCHAR(255) NOT NULL,
     user_id        BIGINT       NOT NULL,
     model          VARCHAR(20)  NOT NULL,
-    status         SMALLINT     NOT NULL,
+    status         VARCHAR(32)  NOT NULL,
     research_brief TEXT,
     created_time   TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW() NOT NULL,
     update_time    TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW() NOT NULL,
@@ -56,9 +56,9 @@ CREATE TABLE task
 (
     id            VARCHAR(255) NOT NULL,
     session_id    VARCHAR(255) NOT NULL,
-    agent_type    SMALLINT     NOT NULL,
+    agent_type    VARCHAR(32)  NOT NULL,
     payload       TEXT,
-    status        SMALLINT     NOT NULL,
+    status        VARCHAR(32)  NOT NULL,
     started_time  TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW() NOT NULL,
     finished_time TIMESTAMP WITHOUT TIME ZONE,
     PRIMARY KEY (id)
@@ -82,6 +82,24 @@ CREATE TABLE "user"
 COMMENT ON COLUMN "user".user_id IS '用户id';
 COMMENT ON COLUMN "user".user_name IS '用户名称';
 COMMENT ON COLUMN "user".password IS '用户密码';
+
+ALTER TABLE session
+    ADD CONSTRAINT fk_session_user
+        FOREIGN KEY (user_id) REFERENCES "user" (user_id);
+
+ALTER TABLE chat_history
+    ADD CONSTRAINT fk_chat_history_session
+        FOREIGN KEY (session_id) REFERENCES session (session_id) ON DELETE CASCADE;
+
+ALTER TABLE task
+    ADD CONSTRAINT fk_task_session
+        FOREIGN KEY (session_id) REFERENCES session (session_id) ON DELETE CASCADE;
+
+CREATE INDEX idx_session_user_id ON session(user_id);
+CREATE INDEX idx_chat_history_session_id ON chat_history(session_id);
+CREATE UNIQUE INDEX uk_chat_history_session_round ON chat_history(session_id, round_number);
+CREATE INDEX idx_task_session_id ON task(session_id);
+CREATE INDEX idx_task_status_started_time ON task(status, started_time DESC);
 
 -- 创建文档元数据表
 CREATE TABLE IF NOT EXISTS document_metadata (

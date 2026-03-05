@@ -29,7 +29,7 @@ public class Task {
     @Column(name = "session_id", nullable = false)
     private String sessionId;
     
-    @Enumerated(EnumType.ORDINAL)
+    @Enumerated(EnumType.STRING)
     @Column(name = "agent_type", nullable = false)
     private AgentTypeEnums agentType;
 
@@ -38,7 +38,7 @@ public class Task {
     @Column(name = "payload", columnDefinition = "TEXT")
     private String payload;
     
-    @Enumerated(EnumType.ORDINAL)
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private SubAgentTaskStatus status;
     
@@ -46,6 +46,6 @@ public class Task {
     @Column(name = "started_time", nullable = false)
     private LocalDateTime startedTime;
     
-    @Column(name = "finished_time", nullable = false)
+    @Column(name = "finished_time")
     private LocalDateTime finishedTime;
 }

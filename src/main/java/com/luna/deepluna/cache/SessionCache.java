@@ -6,22 +6,40 @@ import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntSupplier;
 
 @Slf4j
 @Component
 public class SessionCache {
     // sessionId -> chat rounds
-    private final ConcurrentMap<String, Integer> sessionChatRounds = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, AtomicInteger> sessionChatRounds = new ConcurrentHashMap<>();
 
     // sessionId -> Session
     private final ConcurrentMap<String, Session> activeSessions = new ConcurrentHashMap<>();
 
     public Integer getChatRounds(String sessionId) {
-        return sessionChatRounds.get(sessionId);
+        AtomicInteger rounds = sessionChatRounds.get(sessionId);
+        return rounds == null ? null : rounds.get();
     }
 
     public void putChatRounds(String sessionId, Integer rounds) {
-        sessionChatRounds.put(sessionId, rounds);
+        if (sessionId == null || rounds == null) {
+            log.warn("Attempted to put null sessionId or rounds into sessionChatRounds cache.");
+            return;
+        }
+        sessionChatRounds.put(sessionId, new AtomicInteger(rounds));
+    }
+
+    public int nextChatRound(String sessionId, IntSupplier initialRoundSupplier) {
+        if (sessionId == null || initialRoundSupplier == null) {
+            throw new IllegalArgumentException("sessionId and initialRoundSupplier must not be null");
+        }
+        AtomicInteger counter = sessionChatRounds.computeIfAbsent(
+                sessionId,
+                key -> new AtomicInteger(initialRoundSupplier.getAsInt())
+        );
+        return counter.incrementAndGet();
     }
 
     public Session getActiveSession(String sessionId) {

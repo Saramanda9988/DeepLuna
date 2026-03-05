@@ -35,7 +35,7 @@ public class Session {
     @Column(name = "summary")
     private String summary;
     
-    @Enumerated(EnumType.ORDINAL)
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private SessionStatus status;
     

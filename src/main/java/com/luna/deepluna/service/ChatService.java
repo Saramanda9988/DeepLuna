@@ -20,7 +20,6 @@ import com.luna.deepluna.repository.SessionRepository;
 import com.luna.deepluna.service.factory.CustomModelFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -131,19 +130,6 @@ public class ChatService {
     }
 
     /**
-     * 获取澄清轮数
-     */
-    private Integer getChatRoundNumber(String sessionId) {
-        Integer i = sessionCache.getChatRounds(sessionId);
-        if (i == null) {
-            ChatHistory latestHistory = chatHistoryRepository.findTopBySessionIdOrderByRoundNumberDesc(sessionId);
-            i =  latestHistory != null ? latestHistory.getRoundNumber() : 0;
-            sessionCache.putChatRounds(sessionId, i);
-        }
-        return i;
-    }
-
-    /**
      * 检查问题是否清晰
      */
     private boolean checkQuestionClarity(String message, String sessionId) {
@@ -168,12 +154,16 @@ public class ChatService {
      * 保存澄清历史
      */
     private void saveChatHistorySync(String sessionId, String question, String answer, boolean completed) {
+        int nextRound = sessionCache.nextChatRound(sessionId, () -> {
+            ChatHistory latestHistory = chatHistoryRepository.findTopBySessionIdOrderByRoundNumberDesc(sessionId);
+            return latestHistory != null ? latestHistory.getRoundNumber() : 0;
+        });
         ChatHistory history = ChatHistory.builder()
                 .id(UUID.randomUUID().toString())
                 .sessionId(sessionId)
                 .question(question)
                 .answer(answer)
-                .roundNumber(getChatRoundNumber(sessionId) + 1)
+                .roundNumber(nextRound)
                 .completed(completed)
                 .build();
 
