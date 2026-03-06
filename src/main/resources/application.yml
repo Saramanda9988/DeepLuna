@@ -48,6 +48,7 @@ application:
     schema: ${application.pgsql.schema}
 
 websearch:
+  provider: ${websearch.provider:tavily}
   tavily:
     api:
       key: ${websearch.tavily.api-key}

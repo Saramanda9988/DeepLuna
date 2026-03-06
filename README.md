@@ -35,6 +35,7 @@ gradle test
 ```env
 DEEPSEEK_API_KEY=your-deepseek-key
 ZHIPUAI_API_KEY=your-zhipuai-key
+WEBSEARCH_PROVIDER=tavily
 WEBSEARCH_TAVILY_API_KEY=your-tavily-key
 ```
 
@@ -46,11 +47,18 @@ docker-compose up -d
 
 注意：
 - 数据库初始化脚本位于 `src/main/resources/db/migration/V1__.sql`（包含 chat/session/task/user/document_metadata 等表）
+- `V2__app_config_for_runtime_provider.sql` 会创建 `app_config` 表，默认写入 `websearch.provider=tavily`
 - 使用 `ankane/pgvector` 镜像以启用向量扩展
 - 配置采用两层：
   - `application.yml`：统一结构（字段保持一致）
   - `application-{profile}.properties`：按环境注入值（如 `local` / `prod`）
 - 默认 profile 为 `local`，可用环境变量 `SPRING_PROFILES_ACTIVE` 切换。
+- WebSearch Provider 支持“数据库优先，配置兜底”：
+  - DB 配置键：`websearch.provider`（表：`app_config`）
+  - 配置兜底：`websearch.provider`（`application.yml`）
+  - 运行时接口：
+    - `GET /capi/config/websearch/provider`
+    - `PUT /capi/config/websearch/provider`，body: `{"providerId":"tavily"}`
 
 ## Roadmap
 

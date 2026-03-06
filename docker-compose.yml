@@ -58,6 +58,7 @@ services:
       ZHIPUAI_API_KEY: ${ZHIPUAI_API_KEY}
       
       # Web 搜索 API Key
+      WEBSEARCH_PROVIDER: ${WEBSEARCH_PROVIDER:-tavily}
       WEBSEARCH_TAVILY_API_KEY: ${WEBSEARCH_TAVILY_API_KEY}
 
       # Auth 配置
