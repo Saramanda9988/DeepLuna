@@ -11,6 +11,7 @@ import com.luna.deepluna.common.utils.AssertUtil;
 import com.luna.deepluna.domain.entity.Session;
 import com.luna.deepluna.event.StartResearchEvent;
 import com.luna.deepluna.repository.SessionRepository;
+import com.luna.deepluna.service.SessionProgressService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -31,6 +32,7 @@ public class ResearchEventListener {
     private final ContextCache contextCache;
     private final SessionCache sessionCache;
     private final ReportGenerator reportGenerator;
+    private final SessionProgressService sessionProgressService;
     @Qualifier("persistenceExecutor")
     private final Executor persistenceExecutor;
 
@@ -44,25 +46,39 @@ public class ResearchEventListener {
         AssertUtil.isNotNull(session, "找不到对应的Session，sessionId: " + sessionId);
 
         log.info("Starting research for sessionId: {}", session.getSessionId());
-        // 2. 启动sub-agent执行具体的研究任务
-        updateSessionStatus(session, SessionStatus.RUNNING);
-        supervisorAgent.startResearch(session.getSessionId(), session.getResearchBrief());
+        try {
+            // 2. 启动sub-agent执行具体的研究任务
+            updateSessionStatus(session, SessionStatus.RUNNING);
+            supervisorAgent.startResearch(session.getSessionId(), session.getResearchBrief());
 
-        SupervisorAgentContext supervisor = contextCache.getSupervisor(session.getSessionId());
-        AssertUtil.equal(supervisor.getStatus(), SupervisorAgentState.COMPLETED, "Supervisor Agent未完成研究任务");
+            SupervisorAgentContext supervisor = contextCache.getSupervisor(session.getSessionId());
+            AssertUtil.equal(supervisor.getStatus(), SupervisorAgentState.COMPLETED, "Supervisor Agent未完成研究任务");
 
-        // 3. 生成报告总结
-        updateSessionStatus(session, SessionStatus.REPORTING);
-        reportGenerator.generateFinalReport(sessionId, supervisor);
+            // 3. 生成报告总结
+            updateSessionStatus(session, SessionStatus.REPORTING);
+            reportGenerator.generateFinalReport(sessionId, supervisor);
 
-        updateSessionStatus(session, SessionStatus.COMPLETED);
-        log.info("Research completed for sessionId: {}", session.getSessionId());
+            updateSessionStatus(session, SessionStatus.COMPLETED);
+            log.info("Research completed for sessionId: {}", session.getSessionId());
+        } catch (Exception ex) {
+            log.error("Research execution failed for sessionId={}", session.getSessionId(), ex);
+            sessionProgressService.publishSupervisorStatus(
+                    session.getSessionId(),
+                    SupervisorAgentState.FAILED,
+                    "研究流程执行失败"
+            );
+            updateSessionStatus(session, SessionStatus.FAILED);
+            throw ex instanceof RuntimeException runtimeException
+                    ? runtimeException
+                    : new RuntimeException(ex);
+        }
     }
 
     private void updateSessionStatus(Session session, SessionStatus status) {
         log.info("Updating session {} status to {}", session.getSessionId(), status);
         AssertUtil.isNotNull(session, "Session不能为空");
         session.setStatus(status);
+        sessionProgressService.publishSessionStatus(session.getSessionId(), status, "会话状态更新为: " + status.getDescription());
 
         CompletableFuture.runAsync(() -> {
                     sessionRepository.save(session);

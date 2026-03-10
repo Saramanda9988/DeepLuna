@@ -7,6 +7,7 @@ import com.luna.deepluna.common.enums.SupervisorAgentState;
 import com.luna.deepluna.common.prompt.Prompts;
 import com.luna.deepluna.agent.context.SupervisorAgentContext;
 import com.luna.deepluna.common.utils.AssertUtil;
+import com.luna.deepluna.service.SessionProgressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -45,6 +46,8 @@ public class SupervisorAgent {
 
     private final ContextCache contextCache;
 
+    private final SessionProgressService sessionProgressService;
+
     public void startResearch(String sessionId, String researchBrief) {
         SupervisorAgentContext supervisorAgentContext = SupervisorAgentContext.builder()
                 .supervisorId(UUID.randomUUID().toString())
@@ -55,10 +58,20 @@ public class SupervisorAgent {
                 .notes(new ArrayList<>())
                 .chatMemory(MessageWindowChatMemory.builder()
                         .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                        .maxMessages(400)
                         .build())
                 .build();
         contextCache.putSupervisor(supervisorAgentContext.getSessionId(), supervisorAgentContext);
-        supervisorAgent(supervisorAgentContext.getSessionId());
+        sessionProgressService.publishSupervisorStatus(sessionId, SupervisorAgentState.INITIALIZING, "Supervisor 已初始化");
+        try {
+            supervisorAgent(supervisorAgentContext.getSessionId());
+        } catch (Exception ex) {
+            supervisorAgentContext.setStatus(SupervisorAgentState.FAILED);
+            sessionProgressService.publishSupervisorStatus(sessionId, SupervisorAgentState.FAILED, "Supervisor 执行失败");
+            throw ex instanceof RuntimeException runtimeException
+                    ? runtimeException
+                    : new RuntimeException(ex);
+        }
     }
 
     private void supervisorAgent(String sessionId) {
@@ -83,6 +96,7 @@ public class SupervisorAgent {
                 supervisorId, supervisorAgentContext.getSessionId());
         // 设置状态为运行中
         supervisorAgentContext.setStatus(SupervisorAgentState.RUNNING);
+        sessionProgressService.publishSupervisorStatus(sessionId, SupervisorAgentState.RUNNING, "Supervisor 正在拆解研究任务");
 
         ChatOptions chatOptions = ToolCallingChatOptions.builder()
                 .toolCallbacks(ToolCallbacks.from(supervisorTools))
@@ -107,6 +121,7 @@ public class SupervisorAgent {
                 log.info("Research completed by Supervisor Agent: supervisorId={}, sessionId={}",
                         supervisorId, supervisorAgentContext.getSessionId());
                 supervisorAgentContext.setStatus(SupervisorAgentState.COMPLETED);
+                sessionProgressService.publishSupervisorStatus(sessionId, SupervisorAgentState.COMPLETED, "Supervisor 已完成研究调度");
                 break;
             }
 
@@ -139,7 +154,10 @@ public class SupervisorAgent {
         log.info("任务完成，准备启动总结: supervisorId={}, sessionId={}",
                 supervisorId, supervisorAgentContext.getSessionId());
         // 最终响应处理，生成总结报告
-        supervisorAgentContext.setStatus(SupervisorAgentState.COMPLETED);
+        if (supervisorAgentContext.getStatus() != SupervisorAgentState.COMPLETED) {
+            supervisorAgentContext.setStatus(SupervisorAgentState.COMPLETED);
+            sessionProgressService.publishSupervisorStatus(sessionId, SupervisorAgentState.COMPLETED, "Supervisor 已完成研究调度");
+        }
     }
 
 }

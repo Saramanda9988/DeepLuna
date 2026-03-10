@@ -36,7 +36,7 @@ CREATE TABLE session
 (
     session_id     VARCHAR(255) NOT NULL,
     user_id        BIGINT       NOT NULL,
-    model          VARCHAR(20)  NOT NULL,
+    model          VARCHAR(255) NOT NULL,
     status         VARCHAR(32)  NOT NULL,
     research_brief TEXT,
     created_time   TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW() NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE session
 );
 COMMENT ON COLUMN session.session_id IS '会话id';
 COMMENT ON COLUMN session.user_id IS '对应用户id';
-COMMENT ON COLUMN session.model IS '模型名称';
+COMMENT ON COLUMN session.model IS '模型标识（modelId 或模型名）';
 COMMENT ON COLUMN session.status IS '会话状态';
 COMMENT ON COLUMN session.research_brief IS '会话的brief';
 COMMENT ON COLUMN session.created_time IS '创建时间';

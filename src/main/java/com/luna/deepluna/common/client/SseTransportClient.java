@@ -45,9 +45,7 @@ public class SseTransportClient implements MessageTransportClient<SseEmitter> {
     @Override
     public void sendMessage(SseEmitter connection, ChatResp streamChatResponse) {
         try {
-            connection.send(SseEmitter.event()
-                .name("response")
-                .data(streamChatResponse));
+            sendEvent(connection, "response", streamChatResponse);
         } catch (Exception e) {
             log.error("Error sending SSE message", e);
             handleError(connection, e);
@@ -63,14 +61,18 @@ public class SseTransportClient implements MessageTransportClient<SseEmitter> {
     @Override
     public void sendEndMessage(SseEmitter connection, ChatResp streamChatResponse) {
         try {
-            connection.send(SseEmitter.event()
-                .name("end")
-                .data(streamChatResponse));
+            sendEvent(connection, "end", streamChatResponse);
             completeConnection(connection);
         } catch (Exception e) {
             log.error("Error sending SSE end message", e);
             handleError(connection, e);
         }
+    }
+
+    public void sendEvent(SseEmitter connection, String eventName, Object data) throws Exception {
+        connection.send(SseEmitter.event()
+                .name(eventName)
+                .data(data));
     }
 
     /**

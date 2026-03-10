@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.luna.deepluna.cache.ChatClientCache;
 import com.luna.deepluna.cache.SessionCache;
 import com.luna.deepluna.common.client.SseTransportClient;
+import com.luna.deepluna.common.enums.SessionProgressEventType;
 import com.luna.deepluna.common.enums.SessionStatus;
 import com.luna.deepluna.common.exception.BusinessException;
 import com.luna.deepluna.common.prompt.Prompts;
@@ -61,6 +62,7 @@ public class ChatService {
 
     private final SessionCache sessionCache;
     private final ChatClientCache chatClientCache;
+    private final SessionProgressService sessionProgressService;
 
     private final ApplicationEventPublisher applicationEventPublisher;
 
@@ -107,6 +109,13 @@ public class ChatService {
             updateSessionStatus(session, SessionStatus.FAILED);
             sseTransportClient.handleError(emitter, be);
             throw be;
+        } catch (Exception ex) {
+            log.error("Unexpected exception in chat process", ex);
+            updateSessionStatus(session, SessionStatus.FAILED);
+            sseTransportClient.handleError(emitter, ex);
+            throw ex instanceof RuntimeException runtimeException
+                    ? runtimeException
+                    : new RuntimeException(ex);
         }
     }
 
@@ -215,6 +224,11 @@ public class ChatService {
         session.setResearchBrief(researchBrief);
         sessionRepository.saveAndFlush(session);
         log.info("Saved research brief for sessionId: {}", session.getSessionId());
+        sessionProgressService.publishMessage(
+                session.getSessionId(),
+                SessionProgressEventType.RESEARCH_BRIEF_GENERATED,
+                "研究简报已生成，等待启动研究任务"
+        );
 
         histories.add(new UserMessage(Prompts.SUMMARY_PROMPT.formatted(message)));
 
@@ -277,6 +291,7 @@ public class ChatService {
         log.info("Updating session {} status to {}", session.getSessionId(), status);
         AssertUtil.isNotNull(session, "Session不能为空");
         session.setStatus(status);
+        sessionProgressService.publishSessionStatus(session.getSessionId(), status, "会话状态更新为: " + status.getDescription());
 
         CompletableFuture.runAsync(() -> {
                     sessionRepository.save(session);

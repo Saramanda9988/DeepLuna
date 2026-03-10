@@ -29,7 +29,7 @@ public class Session {
     @Column(name = "user_id", nullable = false)
     private Long userId;
     
-    @Column(name = "model", nullable = false, length = 20)
+    @Column(name = "model", nullable = false, length = 255)
     private String model;
 
     @Column(name = "summary")
@@ -39,7 +39,6 @@ public class Session {
     @Column(name = "status", nullable = false)
     private SessionStatus status;
     
-    @Lob
     @Column(name = "research_brief", columnDefinition = "TEXT")
     private String researchBrief;
     

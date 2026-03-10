@@ -34,7 +34,6 @@ public class Task {
     private AgentTypeEnums agentType;
 
 //    @JdbcTypeCode(SqlTypes.JSON)
-    @Lob
     @Column(name = "payload", columnDefinition = "TEXT")
     private String payload;
     

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -66,12 +67,13 @@ public class ModelService {
      */
     public ModelResponse createModel(ModelRequest request) {
         String modelId = UUID.randomUUID().toString();
+        String normalizedUrl = normalizeModelUrl(request.getUrl());
         
         Model model = Model.builder()
                 .modelId(modelId)
                 .name(request.getName())
                 .token(request.getToken())
-                .url(request.getUrl())
+                .url(normalizedUrl)
                 .createTime(Instant.now())
                 .build();
         
@@ -97,7 +99,7 @@ public class ModelService {
         }
         
         if (request.getUrl() != null) {
-            model.setUrl(request.getUrl());
+            model.setUrl(normalizeModelUrl(request.getUrl()));
         }
         
         modelRepository.save(model);
@@ -116,5 +118,33 @@ public class ModelService {
         modelRepository.deleteById(modelId);
         
         log.info("删除模型成功: modelId={}", modelId);
+    }
+
+    private String normalizeModelUrl(String rawUrl) {
+        if (rawUrl == null || rawUrl.trim().isEmpty()) {
+            throw new BusinessException("模型URL不能为空");
+        }
+        String url = rawUrl.trim();
+        while (url.endsWith("/")) {
+            url = url.substring(0, url.length() - 1);
+        }
+
+        String lower = url.toLowerCase(Locale.ROOT);
+        if (lower.endsWith("/v1/chat/completions")) {
+            url = url.substring(0, url.length() - "/v1/chat/completions".length());
+        } else if (lower.endsWith("/chat/completions")) {
+            url = url.substring(0, url.length() - "/chat/completions".length());
+        } else if (lower.endsWith("/v1")) {
+            url = url.substring(0, url.length() - "/v1".length());
+        }
+
+        while (url.endsWith("/")) {
+            url = url.substring(0, url.length() - 1);
+        }
+
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            throw new BusinessException("模型URL必须以 http:// 或 https:// 开头");
+        }
+        return url;
     }
 }

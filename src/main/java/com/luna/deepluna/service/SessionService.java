@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -48,11 +47,7 @@ public class SessionService {
      * 查询用户历史Session列表
      */
     public List<SessionResponse> getUserSessions(Long userId) {
-        List<Session> sessions = sessionRepository.findByUserId(userId);
-        
-        return sessions.stream()
-                .map(session -> new SessionResponse(session.getSessionId(), session.getSummary()))
-                .collect(Collectors.toList());
+        return sessionRepository.findSessionSummariesByUserId(userId);
     }
     
     /**

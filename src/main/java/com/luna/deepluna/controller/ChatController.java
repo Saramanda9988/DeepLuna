@@ -36,8 +36,12 @@ public class ChatController {
         log.info("Received streaming chat request: sessionId={}, message={}", request.getSessionId(), request.getMessage());
 
         SseEmitter sseEmitter = sseTransportClient.createConnection(30000L);
-
-        chatService.processChat(request, sseEmitter);
+        try {
+            chatService.processChat(request, sseEmitter);
+        } catch (Exception ex) {
+            log.error("Failed to process streaming chat request: sessionId={}", request.getSessionId(), ex);
+            sseTransportClient.handleError(sseEmitter, ex);
+        }
         
         return sseEmitter;
     }

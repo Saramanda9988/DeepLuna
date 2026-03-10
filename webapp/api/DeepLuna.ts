@@ -9,6 +9,7 @@ import { ChatControllerService } from './services/ChatControllerService';
 import { EmbeddingControllerService } from './services/EmbeddingControllerService';
 import { ModelControllerService } from './services/ModelControllerService';
 import { SessionControllerService } from './services/SessionControllerService';
+import { SessionProgressControllerService } from './services/SessionProgressControllerService';
 import { SystemConfigControllerService } from './services/SystemConfigControllerService';
 import { UserControllerService } from './services/UserControllerService';
 type HttpRequestConstructor = new (config: OpenAPIConfig) => BaseHttpRequest;
@@ -17,6 +18,7 @@ export class DeepLuna {
     public readonly embeddingController: EmbeddingControllerService;
     public readonly modelController: ModelControllerService;
     public readonly sessionController: SessionControllerService;
+    public readonly sessionProgressController: SessionProgressControllerService;
     public readonly systemConfigController: SystemConfigControllerService;
     public readonly userController: UserControllerService;
     public readonly request: BaseHttpRequest;
@@ -36,6 +38,7 @@ export class DeepLuna {
         this.embeddingController = new EmbeddingControllerService(this.request);
         this.modelController = new ModelControllerService(this.request);
         this.sessionController = new SessionControllerService(this.request);
+        this.sessionProgressController = new SessionProgressControllerService(this.request);
         this.systemConfigController = new SystemConfigControllerService(this.request);
         this.userController = new UserControllerService(this.request);
     }

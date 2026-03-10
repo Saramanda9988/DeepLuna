@@ -30,7 +30,6 @@ public class ChatHistory {
     @Column(name = "question")
     private String question;
     
-    @Lob
     @Column(name = "answer", columnDefinition = "TEXT")
     private String answer;
     

@@ -1,10 +1,67 @@
 import { API_BASE_URL, TOKEN_STORAGE_KEY } from './deepluna'
 
-export async function streamChatResponse(payload: {
-  sessionId: string
-  message: string
-  modelId?: string
-}): Promise<string> {
+export type ChatStreamEvent = 'response' | 'end' | 'error' | 'message'
+
+export type ChatStreamPayload = {
+  sessionId?: string
+  message?: string
+  sessionStatus?: string
+  code?: number
+  [key: string]: unknown
+}
+
+type StreamHandlers = {
+  onResponse?: (payload: ChatStreamPayload) => void
+  onEnd?: (payload: ChatStreamPayload) => void
+  onError?: (payload: ChatStreamPayload) => void
+}
+
+type ParsedSseEvent = {
+  event: ChatStreamEvent
+  data: string
+}
+
+function parseEventBlock(block: string): ParsedSseEvent | null {
+  const lines = block.split(/\r?\n/)
+  let event: ChatStreamEvent = 'message'
+  const dataLines: string[] = []
+
+  for (const line of lines) {
+    if (line.startsWith('event:')) {
+      const name = line.slice(6).trim()
+      if (name === 'response' || name === 'end' || name === 'error') {
+        event = name
+      } else {
+        event = 'message'
+      }
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trim())
+    }
+  }
+
+  if (dataLines.length === 0) {
+    return null
+  }
+
+  return {
+    event,
+    data: dataLines.join('\n'),
+  }
+}
+
+function tryParsePayload(raw: string): ChatStreamPayload {
+  try {
+    const parsed = JSON.parse(raw) as ChatStreamPayload
+    return parsed
+  } catch {
+    return { message: raw }
+  }
+}
+
+export async function streamChatResponse(
+  payload: { sessionId: string; message: string; modelId?: string },
+  handlers?: StreamHandlers,
+): Promise<{ finalMessage: string; endPayload?: ChatStreamPayload }> {
   const token = localStorage.getItem(TOKEN_STORAGE_KEY) || ''
   const headers: Record<string, string> = {
     Accept: 'text/event-stream',
@@ -27,40 +84,46 @@ export async function streamChatResponse(payload: {
   }
 
   if (!response.body) {
-    return ''
+    return { finalMessage: '' }
   }
 
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
-  let output = ''
+  let mergedMessage = ''
+  let endPayload: ChatStreamPayload | undefined
 
-  const appendEventData = (eventBlock: string) => {
-    const lines = eventBlock.split(/\r?\n/)
-    for (const line of lines) {
-      if (!line.startsWith('data:')) {
-        continue
-      }
-
-      const payloadLine = line.slice(5).trim()
-      if (!payloadLine || payloadLine === '[DONE]') {
-        continue
-      }
-
-      try {
-        const parsed = JSON.parse(payloadLine) as Record<string, unknown>
-        const text =
-          (typeof parsed.delta === 'string' && parsed.delta) ||
-          (typeof parsed.content === 'string' && parsed.content) ||
-          (typeof parsed.message === 'string' && parsed.message) ||
-          (typeof parsed.text === 'string' && parsed.text) ||
-          (typeof parsed.data === 'string' && parsed.data) ||
-          ''
-        output += text || payloadLine
-      } catch {
-        output += payloadLine
-      }
+  const handleEventBlock = (block: string) => {
+    const parsedEvent = parseEventBlock(block)
+    if (!parsedEvent) {
+      return
     }
+
+    const eventPayload = tryParsePayload(parsedEvent.data)
+    const messageChunk =
+      (typeof eventPayload.message === 'string' && eventPayload.message) || ''
+
+    if (parsedEvent.event === 'response') {
+      mergedMessage += messageChunk
+      handlers?.onResponse?.(eventPayload)
+      return
+    }
+
+    if (parsedEvent.event === 'end') {
+      endPayload = eventPayload
+      mergedMessage = messageChunk || mergedMessage
+      handlers?.onEnd?.(eventPayload)
+      return
+    }
+
+    if (parsedEvent.event === 'error') {
+      handlers?.onError?.(eventPayload)
+      throw new Error(
+        (typeof eventPayload.message === 'string' && eventPayload.message) || 'SSE 错误',
+      )
+    }
+
+    mergedMessage += messageChunk
   }
 
   while (true) {
@@ -70,17 +133,23 @@ export async function streamChatResponse(payload: {
     }
 
     buffer += decoder.decode(value, { stream: true })
-    const blocks = buffer.split('\n\n')
-    buffer = blocks.pop() ?? ''
+    buffer = buffer.replace(/\r\n/g, '\n')
 
-    for (const block of blocks) {
-      appendEventData(block)
+    let separatorIndex = buffer.indexOf('\n\n')
+    while (separatorIndex >= 0) {
+      const block = buffer.slice(0, separatorIndex)
+      buffer = buffer.slice(separatorIndex + 2)
+      handleEventBlock(block)
+      separatorIndex = buffer.indexOf('\n\n')
     }
   }
 
-  if (buffer) {
-    appendEventData(buffer)
+  if (buffer.trim()) {
+    handleEventBlock(buffer)
   }
 
-  return output.trim()
+  return {
+    finalMessage: mergedMessage.trim(),
+    endPayload,
+  }
 }
