@@ -41,6 +41,10 @@
     {
       "name": "SessionController",
       "description": "会话管理接口"
+    },
+    {
+      "name": "SessionProgressController",
+      "description": "会话研究进度接口"
     }
   ],
   "paths": {
@@ -941,6 +945,67 @@
         }
       }
     },
+    "/v1/session/progress/{sessionId}/stream": {
+      "get": {
+        "tags": [
+          "SessionProgressController"
+        ],
+        "summary": "订阅会话研究进度",
+        "operationId": "streamSessionProgress",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/SseEmitter"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResult"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResultVoid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/embedding/health": {
       "get": {
         "tags": [
@@ -1018,6 +1083,67 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResultBoolean"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResult"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResultVoid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/capi/session/progress/{sessionId}": {
+      "get": {
+        "tags": [
+          "SessionProgressController"
+        ],
+        "summary": "获取会话研究进度快照",
+        "operationId": "getSessionProgress",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResultSessionProgressSnapshotResponse"
                 }
               }
             }
@@ -1795,6 +1921,128 @@
           }
         },
         "description": "基础返回体"
+      },
+      "ApiResultSessionProgressSnapshotResponse": {
+        "required": [
+          "success"
+        ],
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "成功标识true or false"
+          },
+          "errCode": {
+            "type": "integer",
+            "description": "错误码",
+            "format": "int32"
+          },
+          "errMsg": {
+            "type": "string",
+            "description": "错误消息"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SessionProgressSnapshotResponse"
+          }
+        },
+        "description": "基础返回体"
+      },
+      "SessionProgressSnapshotResponse": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "会话ID"
+          },
+          "sessionStatus": {
+            "type": "string",
+            "description": "会话状态",
+            "enum": [
+              "IDLE",
+              "CLARIFYING",
+              "RUNNING",
+              "REPORTING",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "supervisorState": {
+            "type": "string",
+            "description": "Supervisor状态",
+            "enum": [
+              "IDLE",
+              "INITIALIZING",
+              "RUNNING",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "latestMessage": {
+            "type": "string",
+            "description": "最近一条进度消息"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "最近更新时间",
+            "format": "date-time"
+          },
+          "totalSubAgents": {
+            "type": "integer",
+            "description": "子智能体总数",
+            "format": "int32"
+          },
+          "runningSubAgents": {
+            "type": "integer",
+            "description": "运行中的子智能体数量",
+            "format": "int32"
+          },
+          "completedSubAgents": {
+            "type": "integer",
+            "description": "已完成的子智能体数量",
+            "format": "int32"
+          },
+          "finished": {
+            "type": "boolean",
+            "description": "是否已结束"
+          },
+          "subAgents": {
+            "type": "array",
+            "description": "子智能体列表",
+            "items": {
+              "$ref": "#/components/schemas/SessionProgressSubAgentResponse"
+            }
+          }
+        },
+        "description": "会话研究进度快照"
+      },
+      "SessionProgressSubAgentResponse": {
+        "type": "object",
+        "properties": {
+          "subAgentId": {
+            "type": "string",
+            "description": "子智能体ID"
+          },
+          "researchTopic": {
+            "type": "string",
+            "description": "研究主题"
+          },
+          "status": {
+            "type": "string",
+            "description": "子智能体状态",
+            "enum": [
+              "PENDING",
+              "IN_PROGRESS",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "最近更新时间",
+            "format": "date-time"
+          }
+        },
+        "description": "会话研究进度中的子任务信息"
       },
       "ApiResultListSessionResponse": {
         "required": [
