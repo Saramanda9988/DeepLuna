@@ -87,7 +87,8 @@ public class ChatService {
                         Objects.equals(session.getStatus(), SessionStatus.FAILED),
                 "当前Session状态不允许新的请求"
         );
-        Model model = modelService.getModelEntityById(request.getModelId());
+        String resolvedModelId = resolveModelId(request, session);
+        Model model = modelService.getModelEntityById(resolvedModelId);
         OpenAiChatModel chatModel = customModelFactory.createChatModelClient(model);
         chatClientCache.putBySessionId(session.getSessionId(), chatModel);
 
@@ -136,6 +137,25 @@ public class ChatService {
             sessionCache.putActiveSession(sessionId, session);
         }
         return session;
+    }
+
+    /**
+     * 优先使用请求中的modelId；若未传则回退到Session绑定模型
+     */
+    private String resolveModelId(ChatRequest request, Session session) {
+        String requestModelId = request.getModelId();
+        if (requestModelId != null && !requestModelId.trim().isEmpty()) {
+            return requestModelId;
+        }
+
+        String sessionModelId = session.getModel();
+        if (sessionModelId != null && !sessionModelId.trim().isEmpty()) {
+            log.warn("chat request missing modelId, fallback to session model. sessionId={}, sessionModel={}",
+                    session.getSessionId(), sessionModelId);
+            return sessionModelId;
+        }
+
+        throw new BusinessException("模型ID不能为空");
     }
 
     /**

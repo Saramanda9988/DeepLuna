@@ -10,5 +10,5 @@ body,
 
 body {
   margin: 0;
-  background: linear-gradient(180deg, hsl(var(--b2)) 0%, hsl(var(--b1)) 100%);
+  @apply bg-base-100 text-base-content antialiased;
 }

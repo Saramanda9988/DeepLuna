@@ -24,7 +24,15 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <OverviewPage />,
+        element: <Navigate to="/chat" replace />,
+      },
+      {
+        path: 'chat',
+        element: <ChatPage />,
+      },
+      {
+        path: 'chat/:sessionId',
+        element: <ChatPage />,
       },
       {
         path: 'models',
@@ -35,8 +43,8 @@ const router = createBrowserRouter([
         element: <SessionsPage />,
       },
       {
-        path: 'chat',
-        element: <ChatPage />,
+        path: 'overview',
+        element: <OverviewPage />,
       },
       {
         path: 'system',

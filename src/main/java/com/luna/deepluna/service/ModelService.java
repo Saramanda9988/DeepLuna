@@ -24,6 +24,9 @@ public class ModelService {
     private final ModelRepository modelRepository;
 
     private Model requireModel(String modelId) {
+        if (modelId == null || modelId.trim().isEmpty()) {
+            throw new BusinessException("模型ID不能为空");
+        }
         Optional<Model> optionalModel = modelRepository.findById(modelId);
         return optionalModel.orElseThrow(() -> new BusinessException("模型不存在"));
     }
