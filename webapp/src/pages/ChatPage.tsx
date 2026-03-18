@@ -31,6 +31,7 @@ export function ChatPage() {
 
   const [composerText, setComposerText] = useState('')
   const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({})
+  const [selectedModelId, setSelectedModelId] = useState<string>('')
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const modelsQuery = useQuery({
@@ -50,6 +51,10 @@ export function ChatPage() {
 
   // Hook for realtime progress
   const { progress } = useSessionProgress(sessionId)
+
+  // Derive the effective model id: for existing sessions use session model, for new use selected
+  const sessionModelId = sessionDetailQuery.data?.model
+  const effectiveModelId = sessionId ? (sessionModelId || selectedModelId) : selectedModelId
 
   const appendMessage = (id: string, message: ChatMessage) => {
     setMessagesBySession((prev) => ({
@@ -145,18 +150,18 @@ export function ChatPage() {
   })
 
   // Trigger initial message if navigated from new chat
+  const sendMessageMutateRef = useRef(sendMessageMutation.mutate)
+  sendMessageMutateRef.current = sendMessageMutation.mutate
+
   useEffect(() => {
     if (sessionId && location.state?.initialMessage) {
       const message = location.state.initialMessage
-      // clean state so it doesn't trigger again
+      const modelId = sessionDetailQuery.data?.model || selectedModelId || undefined
       navigate(`/chat/${sessionId}`, { replace: true, state: {} })
-      sendMessageMutation.mutate({
-        sid: sessionId,
-        message,
-        modelId: fallbackModelId || undefined
-      })
+      sendMessageMutateRef.current({ sid: sessionId, message, modelId })
     }
-  }, [sessionId, location.state, navigate, fallbackModelId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, location.state])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -167,18 +172,17 @@ export function ChatPage() {
   const handleSend = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     if (!composerText.trim() || createSessionMutation.isPending || sendMessageMutation.isPending) return
-    
+
     if (!sessionId) {
-      // Create new session
-      const defaultModel = modelsQuery.data?.[0]
-      const modelId = defaultModel?.modelId || defaultModel?.name || ''
-      createSessionMutation.mutate({ model: modelId, initialMessage: composerText.trim() })
+      // New session — require a selected model
+      if (!selectedModelId) return
+      createSessionMutation.mutate({ model: selectedModelId, initialMessage: composerText.trim() })
     } else {
       // Existing session
       sendMessageMutation.mutate({
         sid: sessionId,
         message: composerText.trim(),
-        modelId: fallbackModelId || undefined
+        modelId: effectiveModelId || undefined
       })
     }
     setComposerText('')
@@ -193,7 +197,7 @@ export function ChatPage() {
 
   const isWorking = createSessionMutation.isPending || sendMessageMutation.isPending;
   const activeMessages = sessionId ? messagesBySession[sessionId] ?? [] : []
-  const fallbackModelId = sessionDetailQuery.data?.model || modelsQuery.data?.[0]?.modelId || modelsQuery.data?.[0]?.name
+  const canSend = !isWorking && !!composerText.trim() && (!sessionId ? !!selectedModelId : true)
 
   return (
     <div className="flex flex-col h-full relative bg-base-100">
@@ -202,7 +206,7 @@ export function ChatPage() {
         <div className="absolute top-0 w-full z-10 p-2 sm:p-4 pointer-events-none">
            <div className="max-w-3xl mx-auto pointer-events-auto border border-base-300 rounded-box bg-base-100/90 backdrop-blur shadow-sm">
              <div className="collapse collapse-arrow">
-               <input type="checkbox" /> 
+               <input type="checkbox" />
                <div className="collapse-title text-sm font-medium flex items-center gap-3">
                  {progress.sessionStatus === 'RUNNING' || progress.sessionStatus === 'REPORTING' ? (
                     <span className="loading loading-spinner loading-xs text-primary"></span>
@@ -246,7 +250,28 @@ export function ChatPage() {
               </div>
             </div>
             <h1 className="text-3xl font-bold mb-2 text-base-content">DeepLuna Research</h1>
-            <p className="text-base-content/60 text-lg">今天我能帮您研究什么？</p>
+            <p className="text-base-content/60 text-lg mb-6">今天我能帮您研究什么？</p>
+            {/* Model Selector */}
+            <div className="w-full max-w-xs">
+              <select
+                className="select select-bordered w-full"
+                value={selectedModelId}
+                onChange={(e) => setSelectedModelId(e.target.value)}
+                disabled={modelsQuery.isLoading}
+              >
+                <option value="" disabled>
+                  {modelsQuery.isLoading ? '加载模型中...' : '请选择模型'}
+                </option>
+                {modelsQuery.data?.map((m) => {
+                  const id = m.modelId || m.name || ''
+                  return (
+                    <option key={id} value={id}>
+                      {m.name || id}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
           </div>
         ) : (
           <div className="max-w-3xl mx-auto pt-16 px-4 py-6 flex flex-col gap-8">
@@ -260,8 +285,8 @@ export function ChatPage() {
                     </div>
                   )}
                   <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[15px] leading-relaxed whitespace-pre-wrap shadow-sm ${
-                    message.role === 'user' 
-                      ? 'bg-base-200 text-base-content rounded-tr-none' 
+                    message.role === 'user'
+                      ? 'bg-base-200 text-base-content rounded-tr-none'
                       : 'bg-base-100 text-base-content border border-base-200 rounded-tl-none'
                   }`}>
                     {message.content || (message.pending ? '思考中...' : '')}
@@ -278,18 +303,18 @@ export function ChatPage() {
       {/* Footer Input Area */}
       <div className="absolute bottom-0 w-full bg-gradient-to-t from-base-100 via-base-100 to-transparent pt-6 pb-6 px-4">
         <div className="max-w-3xl mx-auto relative">
-          <form 
-            onSubmit={handleSend} 
+          <form
+            onSubmit={handleSend}
             className="flex flex-col bg-base-100 border border-base-300 rounded-2xl shadow-lg focus-within:border-base-content/30 focus-within:ring-1 focus-within:ring-base-content/30 transition-all"
           >
             <textarea
               className="textarea w-full resize-none bg-transparent border-none focus:outline-none scrollbar-hide py-4 px-4 min-h-[56px] max-h-[200px] text-[15px] leading-relaxed"
               rows={1}
-              placeholder="发送消息给 DeepLuna..."
+              placeholder={!sessionId && !selectedModelId ? '请先选择模型...' : '发送消息给 DeepLuna...'}
               value={composerText}
               onChange={(e) => setComposerText(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={isWorking}
+              disabled={isWorking || (!sessionId && !selectedModelId)}
             />
             <div className="flex justify-between items-center px-3 pb-3">
               <div className="flex gap-2">
@@ -297,10 +322,10 @@ export function ChatPage() {
               </div>
               <button
                 type="submit"
-                disabled={isWorking || !composerText.trim()}
+                disabled={!canSend}
                 className={`btn btn-circle btn-sm border-none shadow-none transition-colors ${
-                  composerText.trim() && !isWorking 
-                    ? 'bg-primary text-primary-content hover:bg-primaryFocus' 
+                  canSend
+                    ? 'bg-primary text-primary-content hover:bg-primaryFocus'
                     : 'bg-base-200 text-base-content/30'
                 }`}
               >
