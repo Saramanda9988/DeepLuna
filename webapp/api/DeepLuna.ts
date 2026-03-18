@@ -6,6 +6,7 @@ import type { BaseHttpRequest } from './core/BaseHttpRequest';
 import type { OpenAPIConfig } from './core/OpenAPI';
 import { FetchHttpRequest } from './core/FetchHttpRequest';
 import { ChatControllerService } from './services/ChatControllerService';
+import { ChatHistoryControllerService } from './services/ChatHistoryControllerService';
 import { EmbeddingControllerService } from './services/EmbeddingControllerService';
 import { ModelControllerService } from './services/ModelControllerService';
 import { SessionControllerService } from './services/SessionControllerService';
@@ -15,6 +16,7 @@ import { UserControllerService } from './services/UserControllerService';
 type HttpRequestConstructor = new (config: OpenAPIConfig) => BaseHttpRequest;
 export class DeepLuna {
     public readonly chatController: ChatControllerService;
+    public readonly chatHistoryController: ChatHistoryControllerService;
     public readonly embeddingController: EmbeddingControllerService;
     public readonly modelController: ModelControllerService;
     public readonly sessionController: SessionControllerService;
@@ -35,6 +37,7 @@ export class DeepLuna {
             ENCODE_PATH: config?.ENCODE_PATH,
         });
         this.chatController = new ChatControllerService(this.request);
+        this.chatHistoryController = new ChatHistoryControllerService(this.request);
         this.embeddingController = new EmbeddingControllerService(this.request);
         this.modelController = new ModelControllerService(this.request);
         this.sessionController = new SessionControllerService(this.request);

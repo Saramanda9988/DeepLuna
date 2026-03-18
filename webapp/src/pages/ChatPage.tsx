@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import type { ChatHistoryResponse } from '../../api'
 import { useAuth } from '../context/AuthContext'
 import { streamChatResponse } from '../lib/chatStream'
 import { apiClient, unwrapResult } from '../lib/deepluna'
@@ -21,6 +22,44 @@ function createMessageId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+function parseCreatedAt(createdTime: string | undefined, fallback: number) {
+  if (!createdTime) {
+    return fallback
+  }
+  const parsed = Date.parse(createdTime)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function buildMessagesFromHistory(histories: ChatHistoryResponse[]): ChatMessage[] {
+  const messages: ChatMessage[] = []
+  const now = Date.now()
+
+  histories.forEach((history, index) => {
+    const baseId = history.id || `round-${history.roundNumber ?? index}`
+    const baseCreatedAt = parseCreatedAt(history.createdTime, now + index * 2)
+
+    if (history.question?.trim()) {
+      messages.push({
+        id: `history-${baseId}-q`,
+        role: 'user',
+        content: history.question,
+        createdAt: baseCreatedAt,
+      })
+    }
+
+    if (history.answer?.trim()) {
+      messages.push({
+        id: `history-${baseId}-a`,
+        role: 'assistant',
+        content: history.answer,
+        createdAt: baseCreatedAt + 1,
+      })
+    }
+  })
+
+  return messages
+}
+
 export function ChatPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
@@ -32,6 +71,7 @@ export function ChatPage() {
   const [composerText, setComposerText] = useState('')
   const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({})
   const [selectedModelId, setSelectedModelId] = useState<string>('')
+  const hydratedHistorySessionsRef = useRef<Set<string>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const modelsQuery = useQuery({
@@ -46,6 +86,16 @@ export function ChatPage() {
       unwrapResult(
         await apiClient.sessionController.getSessionDetail(sessionId!),
         '加载会话详情失败',
+      ),
+  })
+
+  const chatHistoryQuery = useQuery({
+    queryKey: ['chat-history', sessionId],
+    enabled: Boolean(sessionId),
+    queryFn: async () =>
+      unwrapResult(
+        await apiClient.chatHistoryController.getSessionChatHistory(sessionId!),
+        '加载聊天历史失败',
       ),
   })
 
@@ -154,6 +204,25 @@ export function ChatPage() {
   sendMessageMutateRef.current = sendMessageMutation.mutate
 
   useEffect(() => {
+    if (!sessionId || !chatHistoryQuery.data) {
+      return
+    }
+    if (hydratedHistorySessionsRef.current.has(sessionId)) {
+      return
+    }
+
+    const historyMessages = buildMessagesFromHistory(chatHistoryQuery.data)
+    setMessagesBySession((prev) => {
+      const existing = prev[sessionId] ?? []
+      return {
+        ...prev,
+        [sessionId]: [...historyMessages, ...existing],
+      }
+    })
+    hydratedHistorySessionsRef.current.add(sessionId)
+  }, [sessionId, chatHistoryQuery.data])
+
+  useEffect(() => {
     if (sessionId && location.state?.initialMessage) {
       const message = location.state.initialMessage
       const modelId = sessionDetailQuery.data?.model || selectedModelId || undefined
@@ -198,6 +267,11 @@ export function ChatPage() {
   const isWorking = createSessionMutation.isPending || sendMessageMutation.isPending;
   const activeMessages = sessionId ? messagesBySession[sessionId] ?? [] : []
   const canSend = !isWorking && !!composerText.trim() && (!sessionId ? !!selectedModelId : true)
+  const pageError =
+    createSessionMutation.error ||
+    sendMessageMutation.error ||
+    sessionDetailQuery.error ||
+    chatHistoryQuery.error
 
   return (
     <div className="flex flex-col h-full relative bg-base-100">
@@ -344,10 +418,10 @@ export function ChatPage() {
       </div>
 
       {/* Global Error Toast */}
-      {(createSessionMutation.error || sendMessageMutation.error) && (
+      {pageError && (
         <div className="toast toast-top toast-end z-50">
           <div className="alert alert-error shadow-lg">
-            <span>{getErrorMessage(createSessionMutation.error || sendMessageMutation.error)}</span>
+            <span>{getErrorMessage(pageError)}</span>
           </div>
         </div>
       )}
