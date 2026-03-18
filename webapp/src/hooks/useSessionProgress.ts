@@ -75,8 +75,11 @@ export function useSessionProgress(sessionId?: string) {
 
             if (eventType === 'progress' && eventData) {
               try {
-                const parsedData = JSON.parse(eventData) as SessionProgressSnapshotResponse
-                setProgress(parsedData)
+                const parsedEvent = JSON.parse(eventData)
+                const snapshot = parsedEvent.snapshot as SessionProgressSnapshotResponse
+                if (snapshot) {
+                  setProgress(snapshot)
+                }
               } catch (e) {
                 console.error('解析进度事件失败', e)
               }

@@ -282,38 +282,71 @@ export function ChatPage() {
       {/* Top Header / Progress Area */}
       {sessionId && progress ? (
         <div className="absolute top-0 w-full z-10 p-2 sm:p-4 pointer-events-none">
-           <div className="max-w-3xl mx-auto pointer-events-auto border border-base-300 rounded-box bg-base-100/90 backdrop-blur shadow-sm">
-             <div className="collapse collapse-arrow">
-               <input type="checkbox" />
-               <div className="collapse-title text-sm font-medium flex items-center gap-3">
-                 {progress.sessionStatus === 'RUNNING' || progress.sessionStatus === 'REPORTING' ? (
-                    <span className="loading loading-spinner loading-xs text-primary"></span>
-                 ) : (
-                    <div className="bg-success w-2 h-2 rounded-full"></div>
-                 )}
-                 <div>
-                   <span>Research Status: {progress.sessionStatus}</span>
-                   <span className="text-base-content/60 ml-3 text-xs">{progress.latestMessage}</span>
-                 </div>
-               </div>
-               <div className="collapse-content text-xs">
-                 <div className="flex gap-4 mb-2 opacity-75">
-                   <span>Sup Status: {progress.supervisorState}</span>
-                   <span>Agents Running: {progress.runningSubAgents} / {progress.totalSubAgents}</span>
-                 </div>
-                 {progress.subAgents && progress.subAgents.length > 0 && (
-                   <ul className="space-y-1 mt-2">
-                     {progress.subAgents.map(ag => (
-                       <li key={ag.subAgentId} className="flex gap-2">
-                         <span className="w-20 font-bold opacity-70">{ag.status}</span>
-                         <span>{ag.researchTopic}</span>
-                       </li>
-                     ))}
-                   </ul>
-                 )}
-               </div>
-             </div>
-           </div>
+          <div className="max-w-3xl mx-auto pointer-events-auto border border-base-300 rounded-box bg-base-100/90 backdrop-blur shadow-sm">
+            <div className="collapse collapse-arrow">
+              <input type="checkbox" />
+              <div className="collapse-title text-sm font-medium flex items-center gap-2 py-3">
+                {progress.sessionStatus === 'RUNNING' || progress.sessionStatus === 'REPORTING' ? (
+                  <span className="loading loading-spinner loading-xs text-primary shrink-0"></span>
+                ) : progress.sessionStatus === 'COMPLETED' ? (
+                  <svg className="w-3.5 h-3.5 text-success shrink-0" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                ) : (
+                  <div className="w-2 h-2 rounded-full bg-error shrink-0"></div>
+                )}
+                <span className="font-semibold">{progress.sessionStatus}</span>
+                {progress.totalSubAgents != null && progress.totalSubAgents > 0 && (
+                  <span className="text-base-content/50 text-xs">
+                    · {progress.completedSubAgents}/{progress.totalSubAgents} 子任务完成
+                  </span>
+                )}
+                <span className="text-base-content/50 text-xs ml-1 truncate">{progress.latestMessage}</span>
+              </div>
+              <div className="collapse-content text-xs pb-3">
+                {/* Supervisor state */}
+                <div className="flex items-center gap-2 mb-3 text-base-content/60">
+                  <span>Supervisor: <span className="font-medium text-base-content/80">{progress.supervisorState ?? '—'}</span></span>
+                  {progress.totalSubAgents != null && progress.totalSubAgents > 0 && (
+                    <>
+                      <span>·</span>
+                      <span>运行中: <span className="font-medium text-base-content/80">{progress.runningSubAgents}</span></span>
+                      <span>·</span>
+                      <span>总计: <span className="font-medium text-base-content/80">{progress.totalSubAgents}</span></span>
+                    </>
+                  )}
+                </div>
+                {/* SubAgents list */}
+                {progress.subAgents && progress.subAgents.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {progress.subAgents.map(ag => {
+                      const isPending = ag.status === 'PENDING'
+                      const isRunning = ag.status === 'IN_PROGRESS'
+                      const isDone = ag.status === 'COMPLETED'
+                      const isFailed = ag.status === 'FAILED'
+                      return (
+                        <li key={ag.subAgentId} className="flex items-center gap-2">
+                          <span className="shrink-0 w-4 flex justify-center">
+                            {isRunning && <span className="loading loading-spinner loading-xs text-primary"></span>}
+                            {isDone && <svg className="w-3.5 h-3.5 text-success" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                            {isFailed && <svg className="w-3.5 h-3.5 text-error" viewBox="0 0 24 24" fill="none"><path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}
+                            {isPending && <span className="w-1.5 h-1.5 rounded-full bg-base-content/30 inline-block"></span>}
+                          </span>
+                          <span className={`truncate ${isDone ? 'text-base-content/50 line-through' : isFailed ? 'text-error/70' : 'text-base-content/80'}`}>
+                            {ag.researchTopic}
+                          </span>
+                          <span className={`ml-auto shrink-0 badge badge-xs ${
+                            isRunning ? 'badge-primary' :
+                            isDone ? 'badge-success' :
+                            isFailed ? 'badge-error' :
+                            'badge-ghost'
+                          }`}>{ag.status}</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
 
