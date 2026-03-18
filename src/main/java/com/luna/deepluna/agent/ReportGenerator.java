@@ -18,12 +18,10 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -52,21 +50,25 @@ public class ReportGenerator {
         log.info("Generating final report for sessionId: {}", session.getSessionId());
 
         List<Message> conversationHistories = supervisor.getChatMemory().get(supervisor.getSupervisorId());
-        List<Message> histories = new ArrayList<>(conversationHistories);
-        histories.add(new UserMessage(Prompts.FINAL_REPORT_GENERATE_PROMPT.formatted(
+        String assistantTranscript = conversationHistories.stream()
+                .filter(msg -> msg instanceof AssistantMessage)
+                .map(Message::getText)
+                .filter(text -> text != null && !text.isBlank())
+                .reduce("", (a, b) -> a + "\n- " + b);
+
+        String notes = String.join("\n", supervisor.getNotes());
+        String reportPrompt = Prompts.FINAL_REPORT_GENERATE_PROMPT.formatted(
                 session.getResearchBrief(),
-                histories.stream()
-                        .filter(msg -> msg instanceof AssistantMessage)
-                        .map(Message::getText)
-                        .reduce("", (a, b) -> a + "\n- " + b),
+                assistantTranscript,
                 LocalDateTime.now(),
-                String.join("\n", supervisor.getNotes())
-        )));
+                notes
+        );
 
         OpenAiChatModel chatModel = chatClientCache.getBySessionId(sessionId);
         AssertUtil.isNotNull(chatModel, "Chat模型未初始化，无法生成最终报告");
 
-        ChatResponse response = chatModel.call(new Prompt(histories));
+        // 不直接传入 supervisor 原始 memory，避免包含 tool_calls 而触发上下文顺序校验错误
+        ChatResponse response = chatModel.call(new Prompt(List.of(new UserMessage(reportPrompt))));
         Generation result = response.getResult();
         String report = result.getOutput().getText();
         AssertUtil.isNotNull(report, "AI未返回最终报告");
