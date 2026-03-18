@@ -1,5 +1,6 @@
 import daisyui from 'daisyui'
 import scrollbarHide from 'tailwind-scrollbar-hide'
+import typography from '@tailwindcss/typography'
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -7,7 +8,7 @@ export default {
   theme: {
     extend: {},
   },
-  plugins: [daisyui, scrollbarHide],
+  plugins: [daisyui, scrollbarHide, typography],
   daisyui: {
     themes: ['light', 'dark'],
   },

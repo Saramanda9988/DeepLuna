@@ -18,7 +18,7 @@ public class AsyncConfig {
 
     @Bean("agentExecutor")
     public Executor agentExecutor() {
-        return buildExecutor("agent-exec-", 4, 8, 200);
+        return buildExecutor("agent-exec-", 8, 20, 200);
     }
 
     @Bean("retrievalExecutor")

@@ -1,14 +1,13 @@
 package com.luna.deepluna.agent.context;
 
 import com.luna.deepluna.common.enums.SubAgentTaskStatus;
-import com.luna.deepluna.common.enums.SupervisorAgentState;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.ai.chat.memory.ChatMemory;
 
-import java.util.Map;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -25,13 +24,25 @@ public class SubAgentContext {
     private String researchTopic;
 
     // 当前流程的状态
-    private SubAgentTaskStatus status;
+    private volatile SubAgentTaskStatus status;
 
     // 聊天记忆
     private ChatMemory chatMemory;
 
     // 最大工具调用次数
     private Integer maxWebSearch;
+
+    // 子任务最终压缩结果（完成时写入）
+    private volatile String result;
+
+    // 子任务失败原因（失败时写入）
+    private volatile String errorMessage;
+
+    // 开始时间
+    private volatile LocalDateTime startedTime;
+
+    // 结束时间
+    private volatile LocalDateTime finishedTime;
 
     /**
      * Supervisor 发送的取消信号。

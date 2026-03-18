@@ -1,6 +1,5 @@
 package com.luna.deepluna.agent.context;
 
-import com.luna.deepluna.common.enums.SubAgentTaskStatus;
 import com.luna.deepluna.common.enums.SupervisorAgentState;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,8 +8,8 @@ import lombok.NoArgsConstructor;
 import org.springframework.ai.chat.memory.ChatMemory;
 
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Data
 @Builder
@@ -37,4 +36,8 @@ public class SupervisorAgentContext {
 
     // 最大并行数量
     private long maxSubAgentsNumber;
+
+    // 已经收集到notes中的子任务ID（避免重复加入）
+    @Builder.Default
+    private Set<String> collectedSubAgentIds = ConcurrentHashMap.newKeySet();
 }

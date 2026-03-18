@@ -8,7 +8,6 @@ import com.luna.deepluna.common.enums.SubAgentTaskStatus;
 import com.luna.deepluna.common.prompt.Prompts;
 import com.luna.deepluna.common.utils.AssertUtil;
 import com.luna.deepluna.service.SessionProgressService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
@@ -26,18 +25,25 @@ import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.support.ToolCallbacks;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class SubAgent {
 
     private final SubAgentTools subAgentTools;
@@ -49,6 +55,26 @@ public class SubAgent {
     private final ContextCache contextCache;
 
     private final SessionProgressService sessionProgressService;
+
+    private final Executor agentExecutor;
+
+    private final ConcurrentMap<String, LinkedBlockingQueue<SubAgentResultEvent>> sessionResultQueues = new ConcurrentHashMap<>();
+
+    public SubAgent(
+            SubAgentTools subAgentTools,
+            ChatClientCache chatClientCache,
+            ToolCallingManager toolCallingManager,
+            ContextCache contextCache,
+            SessionProgressService sessionProgressService,
+            @Qualifier("agentExecutor") Executor agentExecutor
+    ) {
+        this.subAgentTools = subAgentTools;
+        this.chatClientCache = chatClientCache;
+        this.toolCallingManager = toolCallingManager;
+        this.contextCache = contextCache;
+        this.sessionProgressService = sessionProgressService;
+        this.agentExecutor = agentExecutor;
+    }
 
     public String startSubAgentResearch(String sessionId, String researchTopic) {
         AssertUtil.isNotEmpty(sessionId, "SessionId不能为空");
@@ -65,10 +91,100 @@ public class SubAgent {
                 .build();
         contextCache.putSubAgent(context.getSubAgentId(), context);
         sessionProgressService.publishSubAgentCreated(sessionId, context.getSubAgentId(), researchTopic);
-        return subAgent(context.getSubAgentId());
+
+        CompletableFuture.runAsync(() -> subAgent(context.getSubAgentId()), agentExecutor)
+                .exceptionally(ex -> {
+                    log.error("Sub Agent async execution failed unexpectedly: subAgentId={}", context.getSubAgentId(), ex);
+                    return null;
+                });
+
+        return context.getSubAgentId();
     }
 
-    private String subAgent(String subAgentId) {
+    public Map<String, Object> getSubAgentStatus(String subAgentId) {
+        AssertUtil.isNotEmpty(subAgentId, "subAgentId不能为空");
+        SubAgentContext context = contextCache.getSubAgent(subAgentId);
+        AssertUtil.isNotNull(context, "Sub Agent不存在: subAgentId=" + subAgentId);
+        return buildStatusPayload(context, true);
+    }
+
+    public List<Map<String, Object>> listSessionSubAgentStatuses(String sessionId) {
+        AssertUtil.isNotEmpty(sessionId, "sessionId不能为空");
+        return contextCache.getSubAgentsBySessionId(sessionId)
+                .stream()
+                .map(context -> buildStatusPayload(context, false))
+                .toList();
+    }
+
+    public Map<String, Object> waitForAnySubAgentResult(String sessionId, long timeoutMs) {
+        AssertUtil.isNotEmpty(sessionId, "sessionId不能为空");
+        long normalizedTimeout = timeoutMs <= 0 ? 60000L : timeoutMs;
+        LinkedBlockingQueue<SubAgentResultEvent> queue =
+                sessionResultQueues.computeIfAbsent(sessionId, key -> new LinkedBlockingQueue<>());
+        try {
+            SubAgentResultEvent event = queue.poll(normalizedTimeout, TimeUnit.MILLISECONDS);
+            if (event == null) {
+                return Map.of(
+                        "eventType", "TIMEOUT",
+                        "message", "在等待子任务结果时超时"
+                );
+            }
+            return Map.of(
+                    "eventType", "SUB_AGENT_RESULT",
+                    "subAgentId", event.subAgentId(),
+                    "researchTopic", event.researchTopic(),
+                    "status", event.status(),
+                    "errorMessage", event.errorMessage() == null ? "" : event.errorMessage(),
+                    "hasResult", event.result() != null && !event.result().isBlank(),
+                    "resultPreview", buildPreview(event.result(), 800)
+            );
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return Map.of(
+                    "eventType", "INTERRUPTED",
+                    "message", "等待子任务结果时线程被中断"
+            );
+        }
+    }
+
+    public String getSubAgentResult(String subAgentId) {
+        AssertUtil.isNotEmpty(subAgentId, "subAgentId不能为空");
+        SubAgentContext context = contextCache.getSubAgent(subAgentId);
+        AssertUtil.isNotNull(context, "Sub Agent不存在: subAgentId=" + subAgentId);
+        AssertUtil.isTrue(context.getStatus() == SubAgentTaskStatus.COMPLETED, "该子任务尚未完成");
+        return context.getResult();
+    }
+
+    public void cancelSubAgent(String subAgentId) {
+        AssertUtil.isNotEmpty(subAgentId, "subAgentId不能为空");
+        SubAgentContext context = contextCache.getSubAgent(subAgentId);
+        AssertUtil.isNotNull(context, "Sub Agent不存在: subAgentId=" + subAgentId);
+        context.setCancelled(true);
+    }
+
+    public int cancelRunningSubAgents(String sessionId) {
+        AssertUtil.isNotEmpty(sessionId, "sessionId不能为空");
+        int cancelCount = 0;
+        for (SubAgentContext context : contextCache.getSubAgentsBySessionId(sessionId)) {
+            if (context.getStatus() == SubAgentTaskStatus.PENDING || context.getStatus() == SubAgentTaskStatus.IN_PROGRESS) {
+                context.setCancelled(true);
+                cancelCount++;
+            }
+        }
+        return cancelCount;
+    }
+
+    public String restartFailedSubAgent(String sessionId, String failedSubAgentId) {
+        AssertUtil.isNotEmpty(sessionId, "sessionId不能为空");
+        AssertUtil.isNotEmpty(failedSubAgentId, "failedSubAgentId不能为空");
+        SubAgentContext failed = contextCache.getSubAgent(failedSubAgentId);
+        AssertUtil.isNotNull(failed, "Sub Agent不存在: subAgentId=" + failedSubAgentId);
+        AssertUtil.equal(sessionId, failed.getSessionId(), "Sub Agent与当前会话不匹配");
+        AssertUtil.equal(SubAgentTaskStatus.FAILED, failed.getStatus(), "仅允许重启失败的子任务");
+        return startSubAgentResearch(sessionId, failed.getResearchTopic());
+    }
+
+    private void subAgent(String subAgentId) {
         SubAgentContext subAgent = contextCache.getSubAgent(subAgentId);
         AssertUtil.isNotNull(subAgent, "Sub Agent not found: subAgentId=" + subAgentId);
         AssertUtil.isNotEmpty(subAgent.getSessionId(), "Sub Agent缺少关联sessionId: subAgentId=" + subAgentId);
@@ -82,6 +198,7 @@ public class SubAgent {
         chatMemory.add(subAgentId, new UserMessage("Research Topic" + subAgent.getResearchTopic()));
         try {
             subAgent.setStatus(SubAgentTaskStatus.IN_PROGRESS);
+            subAgent.setStartedTime(LocalDateTime.now());
             log.info("Sub Agent started: subAgentId={}", subAgentId);
             sessionProgressService.publishSubAgentStatus(
                     subAgent.getSessionId(),
@@ -103,8 +220,10 @@ public class SubAgent {
 
             Prompt promptWithMemory = new Prompt(chatMemory.get(subAgentId), chatOptions);
 
+            checkCancelled(subAgent);
             ChatResponse response = chatModel.call(promptWithMemory);
             while (response.hasToolCalls()) {
+                checkCancelled(subAgent);
                 Generation result = response.getResult();
                 chatMemory.add(subAgentId, result.getOutput());
                 List<AssistantMessage.ToolCall> toolCalls = response.getResult().getOutput().getToolCalls();
@@ -118,6 +237,7 @@ public class SubAgent {
                 chatMemory.add(subAgentId, executionResult.conversationHistory().getLast());
 
                 promptWithMemory = new Prompt(chatMemory.get(subAgentId), chatOptions);
+                checkCancelled(subAgent);
                 response = chatModel.call(promptWithMemory);
             }
 
@@ -132,6 +252,10 @@ public class SubAgent {
             String compressResp = result.getOutput().getText();
             AssertUtil.isFalse(compressResp == null || compressResp.isEmpty(), "压缩结果为空");
             subAgent.setStatus(SubAgentTaskStatus.COMPLETED);
+            subAgent.setResult(compressResp);
+            subAgent.setErrorMessage(null);
+            subAgent.setFinishedTime(LocalDateTime.now());
+            publishResultEvent(subAgent, SubAgentTaskStatus.COMPLETED, compressResp, null);
             log.info("Sub Agent completed: subAgentId={}", subAgentId);
             sessionProgressService.publishSubAgentStatus(
                     subAgent.getSessionId(),
@@ -140,9 +264,12 @@ public class SubAgent {
                     SubAgentTaskStatus.COMPLETED,
                     "子任务已完成: " + subAgent.getResearchTopic()
             );
-            return compressResp;
         } catch (Exception ex) {
             subAgent.setStatus(SubAgentTaskStatus.FAILED);
+            subAgent.setResult(null);
+            subAgent.setErrorMessage(ex.getMessage());
+            subAgent.setFinishedTime(LocalDateTime.now());
+            publishResultEvent(subAgent, SubAgentTaskStatus.FAILED, null, ex.getMessage());
             sessionProgressService.publishSubAgentStatus(
                     subAgent.getSessionId(),
                     subAgentId,
@@ -150,9 +277,7 @@ public class SubAgent {
                     SubAgentTaskStatus.FAILED,
                     "子任务执行失败: " + subAgent.getResearchTopic()
             );
-            throw ex instanceof RuntimeException runtimeException
-                    ? runtimeException
-                    : new RuntimeException(ex);
+            throw ex instanceof RuntimeException runtimeException ? runtimeException : new RuntimeException(ex);
         }
     }
 
@@ -170,5 +295,65 @@ public class SubAgent {
                     .append("\n\n");
         }
         return sb.toString();
+    }
+
+    private void checkCancelled(SubAgentContext subAgent) {
+        if (subAgent.isCancelled()) {
+            throw new RuntimeException("[CANCELLED] 子任务被Supervisor中止");
+        }
+    }
+
+    private void publishResultEvent(
+            SubAgentContext subAgent,
+            SubAgentTaskStatus status,
+            String result,
+            String errorMessage
+    ) {
+        LinkedBlockingQueue<SubAgentResultEvent> queue =
+                sessionResultQueues.computeIfAbsent(subAgent.getSessionId(), key -> new LinkedBlockingQueue<>());
+        queue.offer(new SubAgentResultEvent(
+                subAgent.getSubAgentId(),
+                subAgent.getResearchTopic(),
+                status,
+                result,
+                errorMessage
+        ));
+    }
+
+    private Map<String, Object> buildStatusPayload(SubAgentContext context, boolean includeResult) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("subAgentId", context.getSubAgentId());
+        payload.put("sessionId", context.getSessionId());
+        payload.put("researchTopic", context.getResearchTopic());
+        payload.put("status", context.getStatus());
+        payload.put("startedTime", context.getStartedTime());
+        payload.put("finishedTime", context.getFinishedTime());
+        payload.put("errorMessage", context.getErrorMessage());
+        payload.put("hasResult", context.getResult() != null && !context.getResult().isBlank());
+        if (includeResult && context.getResult() != null) {
+            payload.put("result", context.getResult());
+        } else {
+            payload.put("resultPreview", buildPreview(context.getResult(), 600));
+        }
+        return payload;
+    }
+
+    private String buildPreview(String content, int maxChars) {
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        if (content.length() <= maxChars) {
+            return content;
+        }
+        return content.substring(0, maxChars) + "...";
+    }
+
+    private record SubAgentResultEvent(
+            String subAgentId,
+            String researchTopic,
+            SubAgentTaskStatus status,
+            String result,
+            String errorMessage
+    ) {
     }
 }

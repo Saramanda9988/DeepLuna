@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { ChatHistoryResponse } from '../../api'
 import { useAuth } from '../context/AuthContext'
 import { streamChatResponse } from '../lib/chatStream'
@@ -214,9 +216,11 @@ export function ChatPage() {
     const historyMessages = buildMessagesFromHistory(chatHistoryQuery.data)
     setMessagesBySession((prev) => {
       const existing = prev[sessionId] ?? []
+      const merged = [...historyMessages, ...existing]
+      merged.sort((a, b) => a.createdAt - b.createdAt)
       return {
         ...prev,
-        [sessionId]: [...historyMessages, ...existing],
+        [sessionId]: merged,
       }
     })
     hydratedHistorySessionsRef.current.add(sessionId)
@@ -358,15 +362,18 @@ export function ChatPage() {
                       </div>
                     </div>
                   )}
-                  <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[15px] leading-relaxed whitespace-pre-wrap shadow-sm ${
+                  <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[15px] leading-relaxed shadow-sm ${
                     message.role === 'user'
-                      ? 'bg-base-200 text-base-content rounded-tr-none'
-                      : 'bg-base-100 text-base-content border border-base-200 rounded-tl-none'
+                      ? 'bg-base-200 text-base-content rounded-tr-none whitespace-pre-wrap'
+                      : 'bg-base-100 text-base-content border border-base-200 rounded-tl-none prose prose-sm max-w-none'
                   }`}>
-                    {message.content || (message.pending ? '思考中...' : '')}
-                    {message.pending && message.content === '' && (
-                      <span className="loading loading-dots loading-xs opacity-50 ml-2 inline-block align-middle"></span>
-                    )}
+                    {message.role === 'user' ? (
+                      message.content || (message.pending ? '思考中...' : '')
+                    ) : message.content ? (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                    ) : message.pending ? (
+                      <span className="loading loading-dots loading-xs opacity-50 inline-block align-middle"></span>
+                    ) : ''}
                   </div>
                 </div>
              ))}
